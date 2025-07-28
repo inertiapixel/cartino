@@ -121,4 +121,4 @@ export type { I_Cart };
     console.log('Total:', getPriceSum);
 
     
-*/
+*/ 
