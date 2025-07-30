@@ -338,6 +338,7 @@ async clear(): Promise<I_Cart> {
  *
  * Supports value formats like flat amount (e.g., -100, 100) or percentage (e.g., -10%, 10%).
  * If target is not provided, it defaults to 'subtotal'.
+ * If order is not provided, it is auto-incremented based on existing modifiers.
  *
  * @param modifier - Modifier to apply (requires type and value; name is optional)
  * @throws Error if cart or item not found, or modifier is invalid/duplicate
@@ -364,6 +365,12 @@ async applyItemModifier(modifier: I_CartModifier): Promise<I_Cart> {
   const duplicate = item.modifiers.find(m => m.type === normalized.type && m.name === normalized.name);
   if (duplicate) throw new Error(`Modifier "${normalized.name}" already applied.`);
 
+  // Set incremental order if not provided
+  if (typeof normalized.order !== 'number') {
+    const maxOrder = item.modifiers.reduce((max, m) => Math.max(max, m.order ?? 0), 0);
+    normalized.order = maxOrder + 1;
+  }
+
   item.modifiers.push(normalized);
 
   cart.updatedAt = new Date();
@@ -372,15 +379,18 @@ async applyItemModifier(modifier: I_CartModifier): Promise<I_Cart> {
   return cart;
 }
 
+
 /**
  * Apply a pricing modifier (e.g., discount, tax) to all items in the cart.
+ *
+ * If the modifier's `order` is not provided, it will be auto-incremented per item.
  *
  * @param modifier - Modifier definition to apply (must include type and value; target is optional and defaults to "subtotal")
  * @throws Error if cart not found, or modifier is invalid
  */
 async applyModifierToAllItems(modifier: I_CartModifier): Promise<I_Cart> {
   const CartModel = getCartModel();
-  const normalized = normalizeModifier(modifier);
+  const normalizedBase = normalizeModifier(modifier);
 
   const query: Record<string, unknown> = {
     instance: this.instance,
@@ -394,11 +404,19 @@ async applyModifierToAllItems(modifier: I_CartModifier): Promise<I_Cart> {
     item.modifiers ??= [];
 
     const exists = item.modifiers.find(
-      m => m.type === normalized.type && m.name === normalized.name
+      m => m.type === normalizedBase.type && m.name === normalizedBase.name
     );
     if (exists) continue;
 
-    item.modifiers.push({ ...normalized });
+    const modifierToApply = { ...normalizedBase };
+
+    // Assign order per item if not explicitly set
+    if (typeof modifierToApply.order !== 'number') {
+      const maxOrder = item.modifiers.reduce((max, m) => Math.max(max, m.order ?? 0), 0);
+      modifierToApply.order = maxOrder + 1;
+    }
+
+    item.modifiers.push(modifierToApply);
   }
 
   cart.updatedAt = new Date();
@@ -406,6 +424,7 @@ async applyModifierToAllItems(modifier: I_CartModifier): Promise<I_Cart> {
 
   return cart;
 }
+
 
 /**
  * Remove a specific modifier from a cart item by its name.
@@ -485,6 +504,319 @@ async clearItemModifiers(): Promise<I_Cart> {
   return cart;
 }
 
+/**
+ * Retrieve all modifiers applied to a specific cart item.
+ *
+ * @returns Array of modifiers for the item
+ * @throws Error if cart or item not found
+ */
+async getItemModifiers(): Promise<I_CartModifier[]> {
+  const CartModel = getCartModel();
+
+  if (!this._itemId) {
+    throw new Error('Item ID is required before retrieving modifiers');
+  }
+
+  const query: Record<string, unknown> = {
+    instance: this.instance,
+    ...this.owner,
+  };
+
+  const cart = await CartModel.findOne(query);
+  if (!cart) throw new Error('Cart not found');
+
+  const item = cart.items.find(item => item.itemId.toString() === this._itemId!.toString());
+  if (!item) throw new Error('Item not found in cart');
+
+  return item.modifiers || [];
+}
+
+/**
+ * Get one or more modifiers by name(s) for the current item.
+ *
+ * @param nameOrNames - Single name or array of names
+ * @returns Matching modifiers array (could be empty)
+ * @throws Error if cart or item not found
+ */
+async getItemModifierByName(name: string): Promise<I_CartModifier | undefined>;
+async getItemModifierByName(names: string[]): Promise<I_CartModifier[]>;
+async getItemModifierByName(nameOrNames: string | string[]): Promise<I_CartModifier | undefined | I_CartModifier[]> {
+  const modifiers = await this.getItemModifiers();
+
+  if (Array.isArray(nameOrNames)) {
+    return modifiers.filter(mod => mod.name && nameOrNames.includes(mod.name));
+  }
+
+  return modifiers.find(mod => mod.name === nameOrNames);
+}
+
+/**
+ * Get all modifiers by type(s) for the current item.
+ *
+ * @param typeOrTypes - Single type or array of types (e.g., 'discount', 'tax')
+ * @returns Array of matching modifiers
+ * @throws Error if cart or item not found
+ */
+async getItemModifiersByType(typeOrTypes: string | string[]): Promise<I_CartModifier[]> {
+  const types = Array.isArray(typeOrTypes) ? typeOrTypes : [typeOrTypes];
+  const modifiers = await this.getItemModifiers();
+  return modifiers.filter(mod => mod.type && types.includes(mod.type));
+}
+
+/**
+ * Checks if the item has at least one modifier matching the given name and/or type.
+ *
+ * @param filter - Object containing:
+ *   - `name`: a string or array of strings to match modifier names.
+ *   - `type`: a string or array of strings to match modifier types.
+ *   - `match`: 'any' (default) to match either `name` or `type`, or 'all' to require both in the same modifier.
+ * @returns Promise<boolean>
+ *
+ * @example
+ * await cart.item(itemId).hasItemModifier({ name: "discount" });
+ * await cart.item(itemId).hasItemModifier({ type: "tax" });
+ * await cart.item(itemId).hasItemModifier({ name: ["discount", "offer"] });
+ * await cart.item(itemId).hasItemModifier({ name: "discount", type: "tax", match: "any" }); // true if any match
+ * await cart.item(itemId).hasItemModifier({ name: "discount", type: "tax", match: "all" }); // true only if both match in same modifier
+ */
+async hasItemModifier(
+  filter: {
+    name?: string | string[];
+    type?: string | string[];
+    match?: 'any' | 'all';
+  }
+): Promise<boolean> {
+  const modifiers = await this.getItemModifiers();
+  const matchType = filter.match || 'any';
+
+  return modifiers.some((mod) => {
+    const nameMatch = filter.name
+      ? Array.isArray(filter.name)
+        ? filter.name.includes(mod.name!)
+        : mod.name === filter.name
+      : false;
+
+    const typeMatch = filter.type
+      ? Array.isArray(filter.type)
+        ? filter.type.includes(mod.type)
+        : mod.type === filter.type
+      : false;
+
+    if (matchType === 'all') {
+      return nameMatch && typeMatch;
+    } else {
+      return nameMatch || typeMatch;
+    }
+  });
+}
+
+/**
+ * Reorder the modifiers of a specific cart item based on the provided modifier names.
+ * Must be chained after `.owner(userId).item(itemId)` to set the context.
+ *
+ * Any modifiers not included in the `names` array will be appended at the end in original order.
+ * This method reads the cart item using `getContent()` and performs the write update on the document.
+ *
+ * @param names - Array of modifier names specifying the desired order.
+ * @returns Promise<boolean> - Returns true if reorder was successful.
+ * @throws Error if cart or item is not found, or if no item is selected.
+ *
+ * @example
+ * await Cart.owner(userId).item(itemId).reorderItemModifiers(['Coupon', 'Shipping']);
+ */
+async reorderItemModifiers(names: string[]): Promise<boolean> {
+  if (!this._itemId) throw new Error('No item selected');
+
+  const { items } = await this.getContent();
+  const item = items.find(i => i.itemId.toString() === this._itemId!.toString());
+  if (!item) throw new Error('Cart item not found');
+
+  if (!Array.isArray(item.modifiers)) return false;
+
+  const ordered: typeof item.modifiers = [];
+  const remaining = [...item.modifiers];
+
+  // Reorder modifiers based on the given names
+  for (const name of names) {
+    const index = remaining.findIndex(mod => mod.name === name);
+    if (index !== -1) {
+      ordered.push(remaining.splice(index, 1)[0]);
+    }
+  }
+
+  // Append the modifiers not included in names
+  ordered.push(...remaining);
+
+  // Set sequential order values
+  ordered.forEach((mod, index) => {
+    mod.order = index + 1;
+  });
+
+  // Update the actual document
+  const CartModel = getCartModel();
+  const query: Record<string, unknown> = {
+    instance: this.instance,
+    ...this.owner,
+  };
+  const cart = await CartModel.findOne(query);
+  if (!cart) throw new Error('Cart not found');
+
+  const realItem = cart.items.find(i => i.itemId.toString() === this._itemId!.toString());
+  if (!realItem) throw new Error('Cart item not found');
+
+  realItem.modifiers = ordered;
+  cart.updatedAt = new Date();
+  await cart.save();
+
+  return true;
+}
+
+/**
+ * Updates a specific modifier on the selected cart item by name.
+ *
+ * This method allows partial updates to any field of a modifier (e.g. value, type, operator, metadata).
+ * It ensures the cart and item exist, and then applies the updates before saving.
+ *
+ * @param name - The name of the modifier to update.
+ * @param data - A partial object containing fields to update on the modifier.
+ * @returns Promise<boolean> - Returns true if the update was successful.
+ * @throws Error if the cart, item, or modifier is not found.
+ */
+async updateItemModifier(name: string, data: Partial<I_CartModifier>): Promise<boolean> {
+  if (!this._itemId) throw new Error('No item selected');
+
+  const CartModel = getCartModel();
+  const query: Record<string, unknown> = {
+    instance: this.instance,
+    ...this.owner,
+  };
+  const cart = await CartModel.findOne(query);
+  if (!cart) throw new Error('Cart not found');
+
+  const realItem = cart.items.find(i => i.itemId.toString() === this._itemId!.toString());
+  if (!realItem) throw new Error('Cart item not found');
+
+  if (!Array.isArray(realItem.modifiers)) throw new Error('Modifiers not found');
+
+  const mod = realItem.modifiers.find(m => m.name === name);
+  if (!mod) throw new Error(`Modifier '${name}' not found`);
+
+  // Apply partial updates
+  Object.assign(mod, data);
+
+  cart.updatedAt = new Date();
+  await cart.save();
+
+  return true;
+}
+
+/**
+ * Evaluate and apply pricing modifiers to a cart item.
+ *
+ * Returns a detailed summary including subtotal, total, and modifier impact.
+ *
+ * @returns {Promise<{
+*   original: number;
+*   modified: number;
+*   differenceAmount: number;
+*   differencePercent: number;
+*   appliedModifiers: Array<{
+*     name: string;
+*     type: string;
+*     operator: 'add' | 'subtract';
+*     value: string | number;
+*     amount: number;
+*     differenceAmount: number;
+*     differencePercent: number;
+*     isFlat: boolean;
+*     isPercent: boolean;
+*     target: 'subtotal' | 'total';
+*     order?: number;
+*   }>
+* }>}
+*/
+async evaluateItemModifiers(): Promise<{
+  original: number;
+  modified: number;
+  differenceAmount: number;
+  differencePercent: number;
+  appliedModifiers: Array<{
+    name: string;
+    type: string;
+    operator: 'add' | 'subtract';
+    value: string | number;
+    amount: number;
+    differenceAmount: number;
+    differencePercent: number;
+    isFlat: boolean;
+    isPercent: boolean;
+    target: 'subtotal' | 'total';
+    order?: number;
+  }>
+}> {
+  const CartModel = getCartModel();
+  if (!this._itemId) throw new Error('Item ID is required');
+
+  const cart = await CartModel.findOne({
+    instance: this.instance,
+    ...this.owner,
+  });
+
+  if (!cart) throw new Error('Cart not found');
+
+  const item = cart.items.find(i => i.itemId.toString() === this._itemId!.toString());
+  if (!item) throw new Error('Item not found');
+
+  const base = parseFloat((item.price * item.quantity).toFixed(2));
+  let modified = base;
+
+  const appliedModifiers: any[] = [];
+
+  const modifiers = (item.modifiers || []).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+  for (const mod of modifiers) {
+    const value = typeof mod.value === 'string' ? mod.value.trim() : mod.value.toString();
+    const operator = value.startsWith('-') ? 'subtract' : 'add';
+    const isPercent = value.toString().includes('%');
+    const isFlat = !isPercent;
+
+    const numericValue = parseFloat(value.replace('%', '').replace('+', '').replace('-', ''));
+    const amount = parseFloat(
+      (isPercent ? (modified * numericValue) / 100 : numericValue).toFixed(2)
+    );
+
+    const finalAmount = operator === 'subtract' ? -amount : amount;
+    modified = parseFloat((modified + finalAmount).toFixed(2));
+
+    const differenceAmount = parseFloat(Math.abs(amount).toFixed(2));
+    const differencePercent = parseFloat(((differenceAmount / base) * 100).toFixed(2));
+
+    appliedModifiers.push({
+      name: mod.name,
+      type: mod.type,
+      operator,
+      value: mod.value,
+      amount: differenceAmount,
+      differenceAmount,
+      differencePercent,
+      isFlat,
+      isPercent,
+      target: mod.target ?? 'subtotal',
+      order: mod.order,
+    });
+  }
+
+  const differenceAmount = parseFloat((base - modified).toFixed(2));
+  const differencePercent = parseFloat(((differenceAmount / base) * 100).toFixed(2));
+
+  return {
+    original: base,
+    modified,
+    differenceAmount,
+    differencePercent,
+    appliedModifiers,
+  };
+}
 
 //class BaseService end
 }

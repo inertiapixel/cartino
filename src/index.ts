@@ -208,15 +208,34 @@ export type { I_Cart };
 
     cartService.owner(userId).item(itemId).clearItemModifiers()
 
-    getItemModifiers(itemId)
+    cartService.owner(userId).item(itemId).getItemModifiers(itemId)
 
-    hasItemModifier(itemId, modifierName)
+    cartService.owner(userId).item(itemId).getItemModifierByName(name)
+    or
+    cartService.owner(userId).item(itemId).getItemModifierByName([name1,name2])
 
-    reorderItemModifiers(itemId, orderMap)
+    cartService.owner(userId).item(itemId).getItemModifiersByType(type)
+    or
+    cartService.owner(userId).item(itemId).getItemModifiersByType([type1,type2])
 
-    updateItemModifier(itemId, modifierName, updatedFields)
+    await cartService.item(itemId).hasItemModifier({ name: "discount" }); // true or false
+    await cartService.item(itemId).hasItemModifier({ type: "tax" }); // true or false
+    await cartService.item(itemId).hasItemModifier({ name: ["discount", "tax"] }); // true if matches all
+    await cartService.item(itemId).hasItemModifier({ name: "discount", type: "tax" }); // true if either matches 'any' default
+    await cartService.item(itemId).hasItemModifier({ name: "discount", type: "tax", match: "any" });
+    await cartService.item(itemId).hasItemModifier({ name: "discount", type: "tax", match: "all" });
 
-    evaluateItemModifiers(itemId)
+
+    await cartService.item(itemId).reorderItemModifiers(['Coupon', 'Shipping']) //pass modifier name
+
+    await cartService.item(itemId).updateItemModifier('shipping', {
+      value: '50',
+      type: 'flat',
+      operator: 'add',
+      metadata: { region: 'north' }
+    });
+
+    await cartService.item(itemId).evaluateItemModifiers() //get sub total and total after appliying all modifiers
 
     calculateItemFinalPrice(itemId)
 
