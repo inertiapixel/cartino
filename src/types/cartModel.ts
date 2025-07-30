@@ -1,18 +1,26 @@
 import { Document, Types } from 'mongoose';
 
-/**
- * target: 'total': // this condition will be applied to cart's subtotal when getSubTotal() is called.
- * target: 'total'; //this condition will be applied to cart's total when getTotal() is called.
- * type: 'shipping' | 'tax' | 'discount' | 'wrapping' | 'custom' | 'sale' | 'promo';
- */
-export interface I_CartCondition {
+export interface I_CartModifier {
+  /** Human-readable label (optional, for UI/debugging) */
   name?: string;
+
+  /** Required: The type of modifier, useful for filtering/grouping 
+   * ex: 'shipping' | 'tax' | 'discount' | 'wrapping' | 'custom' | 'sale' | 'promo'
+   **/
+
   type: string;
-  value: number;
-  operator?: 'add' | 'subtract';
-  target: 'total' | 'subtotal';
-  order?: number; // defines the sequence (e.g., 1 = applied first, 2 = second)
-  metadata?: Record<string, unknown>; // string, number, object, array, etc.
+
+  /** Required: The numeric value of the modifier */
+  value: string | number; // directly positive or negative: Flat -10, 15, or Percentage 5%, -5% etc.
+
+  /** Required: Whether this affects subtotal or total */
+  target?: 'total' | 'subtotal';
+
+  /** Optional: Execution order (lower = applied earlier) */
+  order?: number;
+
+  /** Optional: Flexible metadata storage */
+  metadata?: Record<string, unknown>;
 }
 
 export interface I_CartItem {
@@ -21,7 +29,7 @@ export interface I_CartItem {
   quantity: number;
   price: number;
   attributes?: Record<string, unknown>;
-//   conditions?: I_CartCondition[];
+  modifiers?: I_CartModifier[];
   associatedModel?: {
     modelName: string;
     data: Record<string, unknown>; // full raw object from Product, Service, etc.
@@ -31,9 +39,9 @@ export interface I_CartItem {
 export interface I_Cart extends Document {
   userId?: Types.ObjectId | null;
   sessionId?: string | null;
-  instance: 'cart' | 'wishlist' | 'saved_for_later';
+  instance: 'cart' | 'wishlist' | 'save_for_later';
   items: I_CartItem[];
-  conditions?: I_CartCondition[];
+  modifiers?: I_CartModifier[];
   metadata?: Record<string, unknown>; //could be store ip, origin, browser etc.
   createdAt: Date;
   updatedAt: Date;

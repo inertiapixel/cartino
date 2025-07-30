@@ -48,17 +48,16 @@ import mongoose, { Schema, Types } from 'mongoose';
 import { I_Cart } from '@your-scope/cartino';
 
 /**
- * target: 'total': // this condition will be applied to cart's subtotal when getSubTotal() is called.
- * target: 'total'; //this condition will be applied to cart's total when getTotal() is called.
+ * target: 'total': // this modifiers will be applied to cart's subtotal when getSubTotal() is called.
+ * target: 'total'; //this modifiers will be applied to cart's total when getTotal() is called.
  * type: 'shipping' | 'tax' | 'discount' | 'wrapping' | 'custom' | 'sale' | 'promo' | etc...;
  */
 
-const ConditionSchema = new Schema(
+const ModifierSchema = new Schema(
   {
-    name: { type: String, required: tru },
+    name: { type: String, required: true },
     type: { type: String, required: true },
-    value: { type: Number, required: true },
-    operator: { type: String, enum: ['add', 'subtract'], default: 'add' },
+    value: { type: String, required: true },
     target: { type: String, enum: ['total', 'subtotal'], default: 'subtotal' },
     order: { type: Number },
     metadata: Schema.Types.Mixed,
@@ -73,7 +72,7 @@ const CartItemSchema = new Schema(
     quantity: { type: Number, default: 1, min: 1 },
     price: { type: Number, required: true },
     attributes: { type: Schema.Types.Mixed }, // allows any dynamic keys
-    // conditions: [ConditionSchema],
+    modifiers: [ModifierSchema],
     associatedModel: {
       modelName: { type: String },
       data: { type: Schema.Types.Mixed }, // allows full raw object (e.g., Product, Service, etc.)
@@ -88,11 +87,11 @@ const CartSchema = new Schema<I_Cart>(
     sessionId: { type: String, default: null },
     instance: {
       type: String,
-      enum: ['cart', 'wishlist', 'saved_for_later'],
+      enum: ['cart', 'wishlist', 'save_for_later'],
       default: 'cart',
     },
     items: [CartItemSchema],
-    conditions: [ConditionSchema],
+    modifiers: [ModifierSchema],
     metadata: Schema.Types.Mixed, //could be store ip, origin, browser etc.
   },
   { timestamps: true }

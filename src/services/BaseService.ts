@@ -1,7 +1,8 @@
 // src/services/BaseService.ts
 import { Types } from 'mongoose';
 import { getCartModel } from '../db/cartinoModel';
-import { I_Cart, I_CartItem } from '../types/cartModel';
+import { I_Cart, I_CartItem, I_CartModifier } from '../types/cartModel';
+import { normalizeModifier } from '../utils/modifierUtils';
 
 interface AssociatedModel {
   modelName: string;
@@ -19,7 +20,7 @@ interface I_AddToCart {
 
 export abstract class BaseService {
   protected owner: { userId?: Types.ObjectId; sessionId?: string };
-  protected abstract instance: 'cart' | 'wishlist' | 'saved_for_later';
+  protected abstract instance: 'cart' | 'wishlist' | 'save_for_later';
   private _itemId?: string | Types.ObjectId;
 
   /**
@@ -308,6 +309,181 @@ async getContent(): Promise<{
   return { items, getPriceSum };
 }
 
+/**
+ * Removes all items and modifiers from the cart.
+ * @returns The updated (now-empty) cart document.
+ * @throws Error if the cart is not found.
+ */
+async clear(): Promise<I_Cart> {
+  const CartModel = getCartModel();
+
+  const query: Record<string, unknown> = {
+    instance: this.instance,
+    ...this.owner
+  };
+
+  const cart: I_Cart | null = await CartModel.findOne(query);
+  if (!cart) throw new Error('Cart not found');
+
+  cart.items = [];
+  cart.modifiers = [];
+  cart.updatedAt = new Date();
+  await cart.save();
+
+  return cart;
+}
+
+/**
+ * Apply a pricing modifier (e.g., discount, tax, shipping) to a specific cart item.
+ *
+ * Supports value formats like flat amount (e.g., -100, 100) or percentage (e.g., -10%, 10%).
+ * If target is not provided, it defaults to 'subtotal'.
+ *
+ * @param modifier - Modifier to apply (requires type and value; name is optional)
+ * @throws Error if cart or item not found, or modifier is invalid/duplicate
+ */
+async applyItemModifier(modifier: I_CartModifier): Promise<I_Cart> {
+  const CartModel = getCartModel();
+  const normalized = normalizeModifier(modifier);
+
+  const query: Record<string, unknown> = {
+    instance: this.instance,
+    ...this.owner,
+  };
+
+  const cart = await CartModel.findOne(query);
+  if (!cart) throw new Error('Cart not found');
+
+  if (!this._itemId) throw new Error('Item ID is required before applying a modifier');
+
+  const item = cart.items.find(item => item.itemId.toString() === this._itemId!.toString());
+  if (!item) throw new Error('Item not found in cart');
+
+  item.modifiers ??= [];
+
+  const duplicate = item.modifiers.find(m => m.type === normalized.type && m.name === normalized.name);
+  if (duplicate) throw new Error(`Modifier "${normalized.name}" already applied.`);
+
+  item.modifiers.push(normalized);
+
+  cart.updatedAt = new Date();
+  await cart.save();
+
+  return cart;
+}
+
+/**
+ * Apply a pricing modifier (e.g., discount, tax) to all items in the cart.
+ *
+ * @param modifier - Modifier definition to apply (must include type and value; target is optional and defaults to "subtotal")
+ * @throws Error if cart not found, or modifier is invalid
+ */
+async applyModifierToAllItems(modifier: I_CartModifier): Promise<I_Cart> {
+  const CartModel = getCartModel();
+  const normalized = normalizeModifier(modifier);
+
+  const query: Record<string, unknown> = {
+    instance: this.instance,
+    ...this.owner,
+  };
+
+  const cart = await CartModel.findOne(query);
+  if (!cart) throw new Error('Cart not found');
+
+  for (const item of cart.items) {
+    item.modifiers ??= [];
+
+    const exists = item.modifiers.find(
+      m => m.type === normalized.type && m.name === normalized.name
+    );
+    if (exists) continue;
+
+    item.modifiers.push({ ...normalized });
+  }
+
+  cart.updatedAt = new Date();
+  await cart.save();
+
+  return cart;
+}
+
+/**
+ * Remove a specific modifier from a cart item by its name.
+ * 
+ * @param modifierName - The name of the modifier to remove
+ * @returns Updated cart document
+ * @throws Error if cart, item, or modifier not found
+ */
+async removeItemModifier(modifierName: string): Promise<I_Cart> {
+  const CartModel = getCartModel();
+
+  if (!this._itemId) {
+    throw new Error('Item ID is required before removing a modifier');
+  }
+
+  const query: Record<string, unknown> = {
+    instance: this.instance,
+    ...this.owner,
+  };
+
+  const cart = await CartModel.findOne(query);
+  if (!cart) throw new Error('Cart not found');
+
+  const item = cart.items.find(item => item.itemId.toString() === this._itemId!.toString());
+  if (!item) throw new Error('Item not found in cart');
+
+  if (!Array.isArray(item.modifiers) || item.modifiers.length === 0) {
+    throw new Error('No modifiers found.');
+  }
+
+  const initialLength = item.modifiers.length;
+  item.modifiers = item.modifiers.filter(m => m.name !== modifierName);
+
+  if (item.modifiers.length === initialLength) {
+    throw new Error(`Modifier "${modifierName}" not found.`);
+  }
+
+  cart.updatedAt = new Date();
+  await cart.save();
+
+  return cart;
+}
+
+/**
+ * Remove all modifiers from a specific cart item.
+ *
+ * @returns Updated cart document
+ * @throws Error if cart or item not found
+ */
+async clearItemModifiers(): Promise<I_Cart> {
+  const CartModel = getCartModel();
+
+  if (!this._itemId) {
+    throw new Error('Item ID is required before clearing modifiers');
+  }
+
+  const query: Record<string, unknown> = {
+    instance: this.instance,
+    ...this.owner,
+  };
+
+  const cart = await CartModel.findOne(query);
+  if (!cart) throw new Error('Cart not found');
+
+  const item = cart.items.find(item => item.itemId.toString() === this._itemId!.toString());
+  if (!item) throw new Error('Item not found in cart');
+
+  if (!item.modifiers || item.modifiers.length === 0) {
+    throw new Error('No modifiers to clear for this item');
+  }
+
+  item.modifiers = [];
+
+  cart.updatedAt = new Date();
+  await cart.save();
+
+  return cart;
+}
 
 
 //class BaseService end
