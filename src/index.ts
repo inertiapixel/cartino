@@ -237,11 +237,14 @@ export type { I_Cart };
 
     await cartService.item(itemId).evaluateItemModifiers() //get sub total and total after appliying all modifiers
 
-    calculateItemFinalPrice(itemId)
+    await cartService.item(itemId).getSubTotal()
+    await cartService.item(itemId).getTotal()
 
-    getItemModifierValue(itemId, modifierName)
+   await cartService.owner().isItemModifierValid(itemId, modifierName)
 
-    isItemModifierValid(itemId, modifierName)
+    Cart.owner(ownerId).isEmpty()
 
-    applyMultipleItemModifiers(itemId, modifiers[])
+    isEmpty()
+    countItems()
+    countTotalQuantity() return integer | throw
 */ 

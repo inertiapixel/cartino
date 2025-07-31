@@ -46,3 +46,8 @@ export interface I_Cart extends Document {
   createdAt: Date;
   updatedAt: Date;
 }
+
+export interface EnrichedCartItem extends I_CartItem {
+  hasAttribute: (key: string) => boolean;
+  getAttribute: (key: string) => unknown;
+}

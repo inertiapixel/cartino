@@ -1,8 +1,9 @@
 // src/services/BaseService.ts
 import { Types } from 'mongoose';
 import { getCartModel } from '../db/cartinoModel';
-import { I_Cart, I_CartItem, I_CartModifier } from '../types/cartModel';
-import { normalizeModifier } from '../utils/modifierUtils';
+import { EnrichedCartItem, I_Cart, I_CartItem, I_CartModifier } from '../types/cartModel';
+import { isModifierValid, normalizeModifier } from '../utils/modifierUtils';
+import { AppliedModifier } from '../types/modifier';
 
 interface AssociatedModel {
   modelName: string;
@@ -38,9 +39,91 @@ export abstract class BaseService {
     }
   }
 
+  /** private functions for internal use only */
+
   item(itemId: string | Types.ObjectId) {
     this._itemId = itemId;
     return this;
+  }
+  
+  private async getCart(): Promise<I_Cart | null> {
+    const CartModel = getCartModel();
+    const query: Record<string, unknown> = {
+      instance: this.instance,
+      ...this.owner,
+    };
+  
+    return await CartModel.findOne(query);
+  }
+
+  private async getOrThrow(): Promise<I_Cart> {
+    const cart = await this.getCart();
+    if (!cart) throw new Error('Cart not found');
+    return cart;
+  }
+
+  private async getItemIndex(itemId: string | Types.ObjectId): Promise<{
+    cart: I_Cart;
+    index: number;
+  }> {
+    const cart = await this.getOrThrow();
+    const itemIdStr = itemId.toString();
+  
+    const index = cart.items.findIndex(
+      item => item.itemId.toString() === itemIdStr
+    );
+  
+    if (index === -1) {
+      throw new Error('Cart item not found');
+    }
+  
+    return { cart, index };
+  }
+
+  private assertItemIdExists(): string {
+    if (!this._itemId) {
+      throw new Error('Item ID is required');
+    }
+    return this._itemId.toString();
+  }
+  
+  private async findItemOrThrow(): Promise<I_CartItem> {
+    const cart = await this.getOrThrow();
+    const itemId = this.assertItemIdExists();
+  
+    const item = cart.items.find(i => i.itemId.toString() === itemId);
+    if (!item) {
+      throw new Error('Item not found');
+    }
+  
+    return item;
+  }
+  
+
+  /** end of private functions for internal use only */
+
+  async isEmpty(): Promise<boolean> {
+    const cart = await this.getCart();
+    return !cart || cart.items.length === 0;
+  }
+
+  async countItems(): Promise<number> {
+    const cart = await this.getOrThrow();
+    return cart.items.length;
+  }
+
+  async countTotalQuantity(): Promise<number> {
+    const cart = await this.getOrThrow();
+    return cart.items.reduce((total, item) => total + item.quantity, 0);
+  }
+  async findItem(itemId: string | Types.ObjectId): Promise<I_CartItem | undefined> {
+    const cart = await this.getOrThrow();
+  
+    const item = cart.items.find(
+      item => item.itemId.toString() === itemId.toString()
+    );
+  
+    return item;
   }
 
   /**
@@ -62,12 +145,8 @@ export abstract class BaseService {
     } = params;
 
     const CartModel = getCartModel();
-    const query: Record<string, unknown> = {
-      instance: this.instance,
-      ...this.owner,
-    };
 
-    let cart: I_Cart | null = await CartModel.findOne(query);
+    let cart = await this.getCart();
 
     if (!cart) {
       cart = new CartModel({
@@ -105,7 +184,7 @@ export abstract class BaseService {
 
     return cart;
   }
-
+  
   /**
    * Removes an item from the cart by its itemId.
    * Throws an error if cart or item is not found.
@@ -114,14 +193,8 @@ export abstract class BaseService {
    * @returns Updated cart document after item removal
    */
   async remove(itemId: string | Types.ObjectId): Promise<I_Cart> {
-    const CartModel = getCartModel();
-    const query: Record<string, unknown> = {
-      instance: this.instance,
-      ...this.owner,
-    };
-  
-    const cart = await CartModel.findOne(query);
-    if (!cart) throw new Error('Cart not found');
+
+    const cart = await this.getOrThrow();
   
     const initialLength = cart.items.length;
     cart.items = cart.items.filter(item => item.itemId.toString() !== itemId.toString());
@@ -146,40 +219,37 @@ export abstract class BaseService {
  * @returns The updated cart document.
  * @throws Error if the cart or item is not found.
  */
-async update(
+ async update(
   itemId: string | Types.ObjectId,
   updates: Partial<Omit<I_CartItem, 'itemId' | 'quantity'>> & {
     quantity?: number;
   }
 ): Promise<I_Cart> {
-  const CartModel = getCartModel();
-  const query: Record<string, unknown> = {
-    instance: this.instance,
-    ...this.owner,
-  };
+  const { cart, index } = await this.getItemIndex(itemId);
+  const item = cart.items[index];
 
-  const cart: I_Cart | null = await CartModel.findOne(query);
-  if (!cart) throw new Error('Cart not found');
-
-  const itemIdStr = itemId.toString();
-
-  const itemIndex = cart.items.findIndex(
-    item => item.itemId.toString() === itemIdStr
-  );
-
-  if (itemIndex === -1) throw new Error('Cart item not found');
-
-  const item = cart.items[itemIndex];
-
-  // If quantity is set and is zero or less, remove the item from cart
   if (updates.quantity !== undefined && updates.quantity <= 0) {
-    cart.items.splice(itemIndex, 1);
+    cart.items.splice(index, 1);
   } else {
-    if (updates.price !== undefined) item.price = parseFloat(updates.price.toFixed(2));
-    if (updates.quantity !== undefined) item.quantity = updates.quantity;
-    if (updates.name !== undefined) item.name = updates.name;
-    if (updates.attributes !== undefined) item.attributes = updates.attributes;
-    if (updates.associatedModel !== undefined) item.associatedModel = updates.associatedModel;
+    if (updates.price !== undefined) {
+      item.price = parseFloat(updates.price.toFixed(2));
+    }
+
+    if (updates.quantity !== undefined) {
+      item.quantity = updates.quantity;
+    }
+
+    if (updates.name !== undefined) {
+      item.name = updates.name;
+    }
+
+    if (updates.attributes !== undefined) {
+      item.attributes = updates.attributes;
+    }
+
+    if (updates.associatedModel !== undefined) {
+      item.associatedModel = updates.associatedModel;
+    }
   }
 
   cart.updatedAt = new Date();
@@ -215,35 +285,22 @@ async decrementQuantity(value: number = 1): Promise<I_Cart> {
 async updateQuantity(
   input: number | { relative?: boolean; quantity: number }
 ): Promise<I_Cart> {
-  const CartModel = getCartModel();
-  const query: Record<string, unknown> = {
-    instance: this.instance,
-    ...this.owner,
-  };
+  if (!this._itemId) throw new Error('Item ID not provided');
 
-  const cart: I_Cart | null = await CartModel.findOne(query);
-  if (!cart) throw new Error('Cart not found');
-
-  const itemIdStr = this._itemId?.toString();
-  if (!itemIdStr) throw new Error('Item ID not provided');
-
-  const itemIndex = cart.items.findIndex(
-    item => item.itemId.toString() === itemIdStr
-  );
-  if (itemIndex === -1) throw new Error('Cart item not found');
-
-  const item = cart.items[itemIndex];
+  const { cart, index } = await this.getItemIndex(this._itemId);
+  const item = cart.items[index];
 
   let newQuantity: number;
+
   if (typeof input === 'number') {
-    newQuantity = input; // absolute set
+    newQuantity = input;
   } else {
     const { relative = false, quantity } = input;
     newQuantity = relative ? item.quantity + quantity : quantity;
   }
 
   if (newQuantity <= 0) {
-    cart.items.splice(itemIndex, 1);
+    cart.items.splice(index, 1);
   } else {
     item.quantity = newQuantity;
   }
@@ -267,44 +324,26 @@ async updateQuantity(
  * Each item includes utility methods: `hasAttribute(key)` and `getAttribute(key)`.
  */
 async getContent(): Promise<{
-  items: (I_CartItem & {
-    hasAttribute: (key: string) => boolean;
-    getAttribute: (key: string) => unknown;
-  })[];
+  items: EnrichedCartItem[];
   getPriceSum: number;
 }> {
-  const CartModel = getCartModel();
+  const cart = await this.getOrThrow();
 
-  const query: Record<string, unknown> = {
-    instance: this.instance,
-    ...this.owner,
-  };
-
-  const cart: I_Cart | null = await CartModel.findOne(query);
-  if (!cart) throw new Error('Cart not found');
-
-  // Explicitly map to plain JS object using I_CartItem shape
-  const items = cart.items.map((item): I_CartItem & {
-    hasAttribute: (key: string) => boolean;
-    getAttribute: (key: string) => unknown;
-  } => {
-    const plainItem: I_CartItem =
-      typeof (item as any).toObject === 'function'
-        ? (item as unknown as { toObject: () => I_CartItem }).toObject()
-        : item;
+  const items: EnrichedCartItem[] = cart.items.map((item) => {
+    const plainItem = item as I_CartItem;
 
     return {
       ...plainItem,
-      hasAttribute(key: string): boolean {
-        return Object.prototype.hasOwnProperty.call(plainItem.attributes ?? {}, key);
-      },
-      getAttribute(key: string): unknown {
-        return plainItem.attributes?.[key] ?? null;
-      },
+      hasAttribute: (key: string): boolean =>
+        Object.prototype.hasOwnProperty.call(plainItem.attributes ?? {}, key),
+      getAttribute: (key: string): unknown =>
+        plainItem.attributes?.[key] ?? null,
     };
   });
 
-  const getPriceSum = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const getPriceSum = items.reduce((sum, item) => {
+    return sum + (item.price ?? 0) * (item.quantity ?? 1);
+  }, 0);
 
   return { items, getPriceSum };
 }
@@ -315,15 +354,7 @@ async getContent(): Promise<{
  * @throws Error if the cart is not found.
  */
 async clear(): Promise<I_Cart> {
-  const CartModel = getCartModel();
-
-  const query: Record<string, unknown> = {
-    instance: this.instance,
-    ...this.owner
-  };
-
-  const cart: I_Cart | null = await CartModel.findOne(query);
-  if (!cart) throw new Error('Cart not found');
+  const cart = await this.getOrThrow();
 
   cart.items = [];
   cart.modifiers = [];
@@ -344,16 +375,16 @@ async clear(): Promise<I_Cart> {
  * @throws Error if cart or item not found, or modifier is invalid/duplicate
  */
 async applyItemModifier(modifier: I_CartModifier): Promise<I_Cart> {
-  const CartModel = getCartModel();
+
+  const cart = await this.getOrThrow();
+
   const normalized = normalizeModifier(modifier);
 
-  const query: Record<string, unknown> = {
-    instance: this.instance,
-    ...this.owner,
-  };
-
-  const cart = await CartModel.findOne(query);
-  if (!cart) throw new Error('Cart not found');
+  // Validate modifier before proceeding
+  const validationResult = isModifierValid(normalized);
+  if (!validationResult.valid) {
+    throw new Error(`Invalid modifier: ${validationResult.details}`);
+  }
 
   if (!this._itemId) throw new Error('Item ID is required before applying a modifier');
 
@@ -363,7 +394,7 @@ async applyItemModifier(modifier: I_CartModifier): Promise<I_Cart> {
   item.modifiers ??= [];
 
   const duplicate = item.modifiers.find(m => m.type === normalized.type && m.name === normalized.name);
-  if (duplicate) throw new Error(`Modifier "${normalized.name}" already applied.`);
+  if (duplicate) throw new Error(`Modifier '${normalized.name}' already applied.`);
 
   // Set incremental order if not provided
   if (typeof normalized.order !== 'number') {
@@ -389,16 +420,13 @@ async applyItemModifier(modifier: I_CartModifier): Promise<I_Cart> {
  * @throws Error if cart not found, or modifier is invalid
  */
 async applyModifierToAllItems(modifier: I_CartModifier): Promise<I_Cart> {
-  const CartModel = getCartModel();
+  const cart = await this.getOrThrow();
   const normalizedBase = normalizeModifier(modifier);
 
-  const query: Record<string, unknown> = {
-    instance: this.instance,
-    ...this.owner,
-  };
-
-  const cart = await CartModel.findOne(query);
-  if (!cart) throw new Error('Cart not found');
+  // Validate before applying
+  if (!isModifierValid(normalizedBase)) {
+    throw new Error('Invalid modifier object');
+  }
 
   for (const item of cart.items) {
     item.modifiers ??= [];
@@ -434,22 +462,8 @@ async applyModifierToAllItems(modifier: I_CartModifier): Promise<I_Cart> {
  * @throws Error if cart, item, or modifier not found
  */
 async removeItemModifier(modifierName: string): Promise<I_Cart> {
-  const CartModel = getCartModel();
-
-  if (!this._itemId) {
-    throw new Error('Item ID is required before removing a modifier');
-  }
-
-  const query: Record<string, unknown> = {
-    instance: this.instance,
-    ...this.owner,
-  };
-
-  const cart = await CartModel.findOne(query);
-  if (!cart) throw new Error('Cart not found');
-
-  const item = cart.items.find(item => item.itemId.toString() === this._itemId!.toString());
-  if (!item) throw new Error('Item not found in cart');
+  const cart = await this.getOrThrow();
+  const item = await this.findItemOrThrow();
 
   if (!Array.isArray(item.modifiers) || item.modifiers.length === 0) {
     throw new Error('No modifiers found.');
@@ -475,29 +489,14 @@ async removeItemModifier(modifierName: string): Promise<I_Cart> {
  * @throws Error if cart or item not found
  */
 async clearItemModifiers(): Promise<I_Cart> {
-  const CartModel = getCartModel();
-
-  if (!this._itemId) {
-    throw new Error('Item ID is required before clearing modifiers');
-  }
-
-  const query: Record<string, unknown> = {
-    instance: this.instance,
-    ...this.owner,
-  };
-
-  const cart = await CartModel.findOne(query);
-  if (!cart) throw new Error('Cart not found');
-
-  const item = cart.items.find(item => item.itemId.toString() === this._itemId!.toString());
-  if (!item) throw new Error('Item not found in cart');
+  const cart = await this.getOrThrow();
+  const item = await this.findItemOrThrow();
 
   if (!item.modifiers || item.modifiers.length === 0) {
     throw new Error('No modifiers to clear for this item');
   }
 
   item.modifiers = [];
-
   cart.updatedAt = new Date();
   await cart.save();
 
@@ -511,23 +510,7 @@ async clearItemModifiers(): Promise<I_Cart> {
  * @throws Error if cart or item not found
  */
 async getItemModifiers(): Promise<I_CartModifier[]> {
-  const CartModel = getCartModel();
-
-  if (!this._itemId) {
-    throw new Error('Item ID is required before retrieving modifiers');
-  }
-
-  const query: Record<string, unknown> = {
-    instance: this.instance,
-    ...this.owner,
-  };
-
-  const cart = await CartModel.findOne(query);
-  if (!cart) throw new Error('Cart not found');
-
-  const item = cart.items.find(item => item.itemId.toString() === this._itemId!.toString());
-  if (!item) throw new Error('Item not found in cart');
-
+  const item = await this.findItemOrThrow();
   return item.modifiers || [];
 }
 
@@ -625,15 +608,11 @@ async hasItemModifier(
  * await Cart.owner(userId).item(itemId).reorderItemModifiers(['Coupon', 'Shipping']);
  */
 async reorderItemModifiers(names: string[]): Promise<boolean> {
-  if (!this._itemId) throw new Error('No item selected');
-
-  const { items } = await this.getContent();
-  const item = items.find(i => i.itemId.toString() === this._itemId!.toString());
-  if (!item) throw new Error('Cart item not found');
+  const item = await this.findItemOrThrow();
 
   if (!Array.isArray(item.modifiers)) return false;
 
-  const ordered: typeof item.modifiers = [];
+  const ordered: I_CartModifier[] = [];
   const remaining = [...item.modifiers];
 
   // Reorder modifiers based on the given names
@@ -644,27 +623,18 @@ async reorderItemModifiers(names: string[]): Promise<boolean> {
     }
   }
 
-  // Append the modifiers not included in names
+  // Append modifiers not mentioned in names
   ordered.push(...remaining);
 
-  // Set sequential order values
+  // Reassign order values
   ordered.forEach((mod, index) => {
     mod.order = index + 1;
   });
 
-  // Update the actual document
-  const CartModel = getCartModel();
-  const query: Record<string, unknown> = {
-    instance: this.instance,
-    ...this.owner,
-  };
-  const cart = await CartModel.findOne(query);
-  if (!cart) throw new Error('Cart not found');
+  // Save updated modifiers back to the item
+  item.modifiers = ordered;
 
-  const realItem = cart.items.find(i => i.itemId.toString() === this._itemId!.toString());
-  if (!realItem) throw new Error('Cart item not found');
-
-  realItem.modifiers = ordered;
+  const cart = await this.getOrThrow();
   cart.updatedAt = new Date();
   await cart.save();
 
@@ -685,20 +655,13 @@ async reorderItemModifiers(names: string[]): Promise<boolean> {
 async updateItemModifier(name: string, data: Partial<I_CartModifier>): Promise<boolean> {
   if (!this._itemId) throw new Error('No item selected');
 
-  const CartModel = getCartModel();
-  const query: Record<string, unknown> = {
-    instance: this.instance,
-    ...this.owner,
-  };
-  const cart = await CartModel.findOne(query);
-  if (!cart) throw new Error('Cart not found');
+  const cart = await this.getOrThrow();
 
-  const realItem = cart.items.find(i => i.itemId.toString() === this._itemId!.toString());
-  if (!realItem) throw new Error('Cart item not found');
+  const item = await this.findItemOrThrow();
 
-  if (!Array.isArray(realItem.modifiers)) throw new Error('Modifiers not found');
+  if (!Array.isArray(item.modifiers)) throw new Error('Modifiers not found');
 
-  const mod = realItem.modifiers.find(m => m.name === name);
+  const mod = item.modifiers.find(m => m.name === name);
   if (!mod) throw new Error(`Modifier '${name}' not found`);
 
   // Apply partial updates
@@ -736,41 +699,18 @@ async updateItemModifier(name: string, data: Partial<I_CartModifier>): Promise<b
 * }>}
 */
 async evaluateItemModifiers(): Promise<{
-  original: number;
-  modified: number;
+  subtotal: number;
+  total: number;
   differenceAmount: number;
   differencePercent: number;
-  appliedModifiers: Array<{
-    name: string;
-    type: string;
-    operator: 'add' | 'subtract';
-    value: string | number;
-    amount: number;
-    differenceAmount: number;
-    differencePercent: number;
-    isFlat: boolean;
-    isPercent: boolean;
-    target: 'subtotal' | 'total';
-    order?: number;
-  }>
+  appliedModifiers: AppliedModifier[];
 }> {
-  const CartModel = getCartModel();
-  if (!this._itemId) throw new Error('Item ID is required');
-
-  const cart = await CartModel.findOne({
-    instance: this.instance,
-    ...this.owner,
-  });
-
-  if (!cart) throw new Error('Cart not found');
-
-  const item = cart.items.find(i => i.itemId.toString() === this._itemId!.toString());
-  if (!item) throw new Error('Item not found');
+  const item = await this.findItemOrThrow();
 
   const base = parseFloat((item.price * item.quantity).toFixed(2));
-  let modified = base;
+  let total = base;
 
-  const appliedModifiers: any[] = [];
+  const appliedModifiers: AppliedModifier[] = [];
 
   const modifiers = (item.modifiers || []).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
@@ -782,11 +722,11 @@ async evaluateItemModifiers(): Promise<{
 
     const numericValue = parseFloat(value.replace('%', '').replace('+', '').replace('-', ''));
     const amount = parseFloat(
-      (isPercent ? (modified * numericValue) / 100 : numericValue).toFixed(2)
+      (isPercent ? (total * numericValue) / 100 : numericValue).toFixed(2)
     );
 
     const finalAmount = operator === 'subtract' ? -amount : amount;
-    modified = parseFloat((modified + finalAmount).toFixed(2));
+    total = parseFloat((total + finalAmount).toFixed(2));
 
     const differenceAmount = parseFloat(Math.abs(amount).toFixed(2));
     const differencePercent = parseFloat(((differenceAmount / base) * 100).toFixed(2));
@@ -796,7 +736,6 @@ async evaluateItemModifiers(): Promise<{
       type: mod.type,
       operator,
       value: mod.value,
-      amount: differenceAmount,
       differenceAmount,
       differencePercent,
       isFlat,
@@ -806,16 +745,25 @@ async evaluateItemModifiers(): Promise<{
     });
   }
 
-  const differenceAmount = parseFloat((base - modified).toFixed(2));
+  const differenceAmount = parseFloat((base - total).toFixed(2));
   const differencePercent = parseFloat(((differenceAmount / base) * 100).toFixed(2));
 
   return {
-    original: base,
-    modified,
+    subtotal: base,
+    total,
     differenceAmount,
     differencePercent,
     appliedModifiers,
   };
+}
+
+
+async getItemSubTotal(): Promise<number> {
+  return (await this.evaluateItemModifiers()).subtotal;
+}
+
+async getItemTotal(): Promise<number> {
+  return (await this.evaluateItemModifiers()).total;
 }
 
 //class BaseService end
