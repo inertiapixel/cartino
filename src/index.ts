@@ -247,4 +247,17 @@ export type { I_Cart };
     isEmpty()
     countItems()
     countTotalQuantity() return integer | throw
+
+
+
+    =======)))))))))==========Merge Guest Cart with Auth Cart=======)))))))))==========
+    On login, transfer items from guest cart (cookie/localstorage ID)
+
+    Smart merge logic to prevent duplicates
+    =======)))))))))==========end=======)))))))))==========
+
+    ====moveTo====
+    const result = await Cart.owner(userId).item(itemId).moveTo('save_for_later');
+    const result = await SaveForLater.owner(userId).item(itemId).moveTo('cart');
+
 */ 

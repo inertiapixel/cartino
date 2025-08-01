@@ -766,5 +766,61 @@ async getItemTotal(): Promise<number> {
   return (await this.evaluateItemModifiers()).total;
 }
 
+async moveTo(target: 'cart' | 'save_for_later'): Promise<I_Cart> {
+  if (this.instance === target) {
+    throw new Error(`Source and target must be different. Cannot move item from "${this.instance}" to "${target}".`);
+  }
+
+  const currentCart = await this.getOrThrow();
+  const item = await this.findItemOrThrow();
+
+  const CartModel = getCartModel();
+  const query: Record<string, unknown> = {
+    instance: target,
+    ...this.owner,
+  };
+
+  let targetCart = await CartModel.findOne(query);
+
+  if (!targetCart) {
+    targetCart = new CartModel({
+      ...this.owner,
+      instance: target,
+      items: [],
+    });
+  }
+
+  // Check if the item already exists in the target cart
+  const existingItem = targetCart.items.find(
+    (i) =>
+      i.itemId.toString() === item.itemId.toString() &&
+      JSON.stringify(i.attributes || {}) === JSON.stringify(item.attributes || {})
+  );
+
+  if (existingItem) {
+    // Merge quantity into existing item
+    existingItem.quantity += item.quantity;
+  } else {
+    // Push the new item
+    targetCart.items.push(item);
+  }
+
+  targetCart.updatedAt = new Date();
+
+  // Save target cart first
+  await targetCart.save();
+
+  // Now safely remove the item from the source cart
+  currentCart.items = currentCart.items.filter(
+    (i) => i.itemId.toString() !== this._itemId!.toString()
+  );
+  currentCart.updatedAt = new Date();
+
+  await currentCart.save();
+
+  return targetCart;
+}
+
+  
 //class BaseService end
 }
