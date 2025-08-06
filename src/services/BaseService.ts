@@ -2,8 +2,9 @@
 import { Types } from 'mongoose';
 import { getCartModel } from '../db/cartinoModel';
 import { EnrichedCartItem, I_Cart, I_CartItem, I_CartModifier } from '../types/cartModel';
-import { isModifierValid, normalizeModifier } from '../utils/modifierUtils';
-import { AppliedModifier } from '../types/modifier';
+import { isModifierValid, normalizeModifier, validateModifierOrder, validateModifierTarget, validateModifierType, validateModifierValue } from '../utils/modifierUtils';
+import { AppliedModifier, ModifierValidationIssue } from '../types/modifier';
+import { _evaluateCartModifiers, _getSubTotal } from '../utils';
 
 interface AssociatedModel {
   modelName: string;
@@ -101,7 +102,6 @@ export abstract class BaseService {
   
 
   /** end of private functions for internal use only */
-
   async isEmpty(): Promise<boolean> {
     const cart = await this.getCart();
     return !cart || cart.items.length === 0;
@@ -116,6 +116,7 @@ export abstract class BaseService {
     const cart = await this.getOrThrow();
     return cart.items.reduce((total, item) => total + item.quantity, 0);
   }
+
   async findItem(itemId: string | Types.ObjectId): Promise<I_CartItem | undefined> {
     const cart = await this.getOrThrow();
   
@@ -323,7 +324,7 @@ async updateQuantity(
  * 
  * Each item includes utility methods: `hasAttribute(key)` and `getAttribute(key)`.
  */
-async getContent(): Promise<{
+async getContent1(): Promise<{
   items: EnrichedCartItem[];
   getPriceSum: number;
 }> {
@@ -652,25 +653,60 @@ async reorderItemModifiers(names: string[]): Promise<boolean> {
  * @returns Promise<boolean> - Returns true if the update was successful.
  * @throws Error if the cart, item, or modifier is not found.
  */
-async updateItemModifier(name: string, data: Partial<I_CartModifier>): Promise<boolean> {
+async updateItemModifier(name: string, modifier: Partial<I_CartModifier>) {
   if (!this._itemId) throw new Error('No item selected');
 
   const cart = await this.getOrThrow();
 
-  const item = await this.findItemOrThrow();
+  if (!Array.isArray(cart.items)) {
+    throw new Error('Cart items not found or invalid');
+  }
 
-  if (!Array.isArray(item.modifiers)) throw new Error('Modifiers not found');
+  const itemIndex = cart.items.findIndex(i => i.itemId.equals(this._itemId));
+  if (itemIndex === -1) throw new Error('Item not found');
 
-  const mod = item.modifiers.find(m => m.name === name);
-  if (!mod) throw new Error(`Modifier '${name}' not found`);
+  const item = cart.items[itemIndex];
 
-  // Apply partial updates
-  Object.assign(mod, data);
+  if (!Array.isArray(item.modifiers)) {
+    throw new Error('Modifiers not found on item');
+  }
 
+  const existingModifierIndex = item.modifiers.findIndex(m => m.name === name);
+  if (existingModifierIndex === -1) {
+    throw new Error(`Modifier "${name}" not found on item`);
+  }
+
+  // Validate the incoming modifier update
+  const issues: ModifierValidationIssue[] = [];
+
+  const typeIssue = validateModifierType(modifier.type);
+  if (typeIssue) issues.push(typeIssue);
+
+  const valueIssue = validateModifierValue(modifier.value);
+  if (valueIssue) issues.push(valueIssue);
+
+  const targetIssue = validateModifierTarget(modifier.target);
+  if (targetIssue) issues.push(targetIssue);
+
+  const orderIssue = validateModifierOrder(modifier.order);
+  if (orderIssue) issues.push(orderIssue);
+
+  if (issues.length) {
+    throw new Error(
+      `Invalid modifier update for "${name}":\n` +
+        issues.map(i => `- ${i.reason} (e.g., ${i.example})`).join('\n')
+    );
+  }
+
+  // Merge the update into the existing modifier
+  const existingModifier = item.modifiers[existingModifierIndex];
+  Object.assign(existingModifier, modifier);
+
+  // Update timestamp and save the cart
   cart.updatedAt = new Date();
   await cart.save();
 
-  return true;
+  return cart;
 }
 
 /**
@@ -821,6 +857,383 @@ async moveTo(target: 'cart' | 'save_for_later'): Promise<I_Cart> {
   return targetCart;
 }
 
-  
+async applyModifier(modifier: I_CartModifier): Promise<I_Cart> {
+  const cart = await this.getOrThrow();
+
+  const normalized = normalizeModifier(modifier);
+
+  // Validate modifier
+  const validationResult = isModifierValid(normalized);
+  if (!validationResult.valid) {
+    throw new Error(`Invalid modifier: ${JSON.stringify(validationResult.details)}`);
+  }
+
+  cart.modifiers ??= [];
+
+  const duplicate = cart.modifiers.find(m => m.type === normalized.type && m.name === normalized.name);
+  if (duplicate) throw new Error(`Modifier '${normalized.name}' already applied.`);
+
+  // Auto-set order if missing
+  if (typeof normalized.order !== 'number') {
+    const maxOrder = cart.modifiers.reduce((max, m) => Math.max(max, m.order ?? 0), 0);
+    normalized.order = maxOrder + 1;
+  }
+
+  cart.modifiers.push(normalized);
+
+  cart.updatedAt = new Date();
+  await cart.save();
+
+  return cart;
+}
+
+
+async removeModifier(modifierName: string): Promise<I_Cart> {
+  const cart = await this.getOrThrow();
+
+  if (!cart.modifiers || cart.modifiers.length === 0) {
+    throw new Error(`No modifiers found on ${this.instance}.`);
+  }
+
+  const initialLength = cart.modifiers.length;
+  cart.modifiers = cart.modifiers.filter(m => m.name !== modifierName);
+
+  if (cart.modifiers.length === initialLength) {
+    throw new Error(`Modifier "${modifierName}" not found.`);
+  }
+
+  cart.updatedAt = new Date();
+  await cart.save();
+
+  return cart;
+}
+
+async removeModifierByType(type: string): Promise<I_Cart> {
+  const cart = await this.getOrThrow();
+
+  if (!cart.modifiers || cart.modifiers.length === 0) {
+    return cart;
+  }
+
+  const originalCount = cart.modifiers.length;
+  const newModifiers = cart.modifiers.filter(mod => mod.type !== type);
+
+  if (newModifiers.length === originalCount) {
+    throw new Error(`No modifier found with type '${type}'`);
+  }
+
+  cart.modifiers = newModifiers;
+  cart.markModified('modifiers');
+
+  cart.updatedAt = new Date();
+  await cart.save();
+
+  return cart;
+}
+
+async clearModifiers(): Promise<I_Cart> {
+  const cart = await this.getOrThrow();
+
+  cart.modifiers = [];
+  cart.markModified('modifiers');
+
+  cart.updatedAt = new Date();
+  await cart.save();
+
+  return cart;
+}
+
+async getModifiers(): Promise<I_CartModifier[]> {
+  const cart = await this.getOrThrow();
+  return cart.modifiers ?? [];
+}
+
+async getModifier(name: string | string[]): Promise<I_CartModifier[]> {
+  const cart = await this.getOrThrow();
+  const modifiers = cart.modifiers ?? [];
+
+  const names = Array.isArray(name) ? name.map(n => n.toLowerCase()) : [name.toLowerCase()];
+
+  return modifiers.filter(m => m.name && names.includes(m.name.toLowerCase()));
+}
+
+
+async getModifierByType(type: string | string[]): Promise<I_CartModifier[]> {
+  const cart = await this.getOrThrow();
+  const modifiers = cart.modifiers ?? [];
+
+  const types = Array.isArray(type) ? type : [type];
+
+  return modifiers.filter(m => types.includes(m.type));
+}
+
+/**
+ * Checks if the cart has at least one modifier matching the given name and/or type.
+ *
+ * @param filter - Object containing:
+ *   - `name`: a string or array of strings to match modifier names.
+ *   - `type`: a string or array of strings to match modifier types.
+ *   - `match`: 'any' (default) to match either `name` or `type`, or 'all' to require both in the same modifier.
+ * @returns boolean
+ *
+ * @example
+ * cart.hasModifier({ name: "discount" });
+ * cart.hasModifier({ type: "shipping" });
+ * cart.hasModifier({ name: ["coupon", "gift"] });
+ * cart.hasModifier({ name: "tax", type: "service", match: "any" });
+ * cart.hasModifier({ name: "tax", type: "service", match: "all" });
+ */
+async hasModifier(filter: {
+  name?: string | string[];
+  type?: string | string[];
+  match?: 'any' | 'all';
+}
+): Promise<boolean> {
+  const cart = await this.getOrThrow();
+  const modifiers = cart.modifiers ?? [];
+
+  const matchType = filter.match || 'any';
+
+  return modifiers.some((mod) => {
+    const nameMatch = filter.name
+      ? Array.isArray(filter.name)
+        ? filter.name.includes(mod.name!)
+        : mod.name === filter.name
+      : false;
+
+    const typeMatch = filter.type
+      ? Array.isArray(filter.type)
+        ? filter.type.includes(mod.type)
+        : mod.type === filter.type
+      : false;
+
+    return matchType === 'all' ? nameMatch && typeMatch : nameMatch || typeMatch;
+  });
+}
+
+/**
+ * Reorder the cart-level modifiers based on the provided modifier names.
+ * Must be chained after `.owner(userId)` to set the context.
+ *
+ * Any modifiers not included in the `names` array will be appended at the end in original order.
+ * This method reads the cart using `getOrThrow()` and performs the write update on the document.
+ *
+ * @param names - Array of modifier names specifying the desired order.
+ * @returns Promise<boolean> - Returns true if reorder was successful.
+ * @throws Error if cart is not found.
+ *
+ * @example
+ * await Cart.owner(userId).reorderModifiers(['Tax', 'Shipping']);
+ */
+async reorderModifiers(names: string[]): Promise<boolean> {
+  const cart = await this.getOrThrow();
+
+  if (!Array.isArray(cart.modifiers)) return false;
+
+  const ordered: I_CartModifier[] = [];
+  const remaining = [...cart.modifiers];
+
+  // Reorder modifiers based on the given names
+  for (const name of names) {
+    const index = remaining.findIndex(mod => mod.name === name);
+    if (index !== -1) {
+      ordered.push(remaining.splice(index, 1)[0]);
+    }
+  }
+
+  // Append remaining modifiers that were not explicitly ordered
+  ordered.push(...remaining);
+
+  // Reassign the order property
+  ordered.forEach((mod, index) => {
+    mod.order = index + 1;
+  });
+
+  // Save updated modifier order to cart
+  cart.modifiers = ordered;
+  cart.updatedAt = new Date();
+  await cart.save();
+
+  return true;
+}
+
+
+async updateModifier(name: string, modifier: Partial<I_CartModifier>) {
+  const cart = await this.getOrThrow();
+
+  if (!Array.isArray(cart.modifiers)) {
+    throw new Error('Modifiers not found or invalid');
+  }
+
+  const existingModifierIndex = cart.modifiers.findIndex(m => m.name === name);
+  if (existingModifierIndex === -1) {
+    throw new Error(`Modifier "${name}" not found on cart`);
+  }
+
+  // Validate the incoming modifier update
+  const issues: ModifierValidationIssue[] = [];
+
+  const typeIssue = validateModifierType(modifier.type);
+  if (typeIssue) issues.push(typeIssue);
+
+  const valueIssue = validateModifierValue(modifier.value);
+  if (valueIssue) issues.push(valueIssue);
+
+  const targetIssue = validateModifierTarget(modifier.target);
+  if (targetIssue) issues.push(targetIssue);
+
+  const orderIssue = validateModifierOrder(modifier.order);
+  if (orderIssue) issues.push(orderIssue);
+
+  if (issues.length) {
+    throw new Error(
+      `Invalid modifier update for "${name}":\n` +
+        issues.map(i => `- ${i.reason} (e.g., ${i.example})`).join('\n')
+    );
+  }
+
+  // Merge the update into the existing modifier
+  const existingModifier = cart.modifiers[existingModifierIndex];
+  Object.assign(existingModifier, modifier);
+
+  // Update timestamp and save the cart
+  cart.updatedAt = new Date();
+  await cart.save();
+
+  return cart;
+}
+
+async evaluateModifiers(): Promise<{
+  subtotal: number;
+  total: number;
+  differenceAmount: number;
+  differencePercent: number;
+  appliedModifiers: AppliedModifier[];
+}> {
+  const cart = await this.getOrThrow(); // Assuming you have this method
+  const items = cart.items || [];
+
+  // Step 1: Calculate subtotal (sum of item prices × quantity)
+  const subtotal = parseFloat(
+    items.reduce((acc, item) => acc + item.price * item.quantity, 0).toFixed(2)
+  );
+
+  let total = subtotal;
+  const appliedModifiers: AppliedModifier[] = [];
+
+  // Step 2: Sort cart-level modifiers by order
+  const modifiers = (cart.modifiers || []).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+  // Step 3: Apply each modifier
+  for (const mod of modifiers) {
+    const value = typeof mod.value === 'string' ? mod.value.trim() : mod.value.toString();
+    const operator = value.startsWith('-') ? 'subtract' : 'add';
+    const isPercent = value.includes('%');
+    const isFlat = !isPercent;
+
+    const numericValue = parseFloat(value.replace('%', '').replace('+', '').replace('-', ''));
+    const amount = parseFloat(
+      (isPercent ? (total * numericValue) / 100 : numericValue).toFixed(2)
+    );
+
+    const finalAmount = operator === 'subtract' ? -amount : amount;
+    total = parseFloat((total + finalAmount).toFixed(2));
+
+    const differenceAmount = parseFloat(Math.abs(amount).toFixed(2));
+    const differencePercent = parseFloat(((differenceAmount / subtotal) * 100).toFixed(2));
+
+    appliedModifiers.push({
+      name: mod.name,
+      type: mod.type,
+      operator,
+      value: mod.value,
+      differenceAmount,
+      differencePercent,
+      isFlat,
+      isPercent,
+      target: mod.target ?? 'subtotal',
+      order: mod.order,
+    });
+  }
+
+  const differenceAmount = parseFloat((subtotal - total).toFixed(2));
+  const differencePercent = parseFloat(((differenceAmount / subtotal) * 100).toFixed(2));
+
+  return {
+    subtotal,
+    total,
+    differenceAmount,
+    differencePercent,
+    appliedModifiers,
+  };
+}
+
+async getSubTotal(): Promise<number> {
+  const cart = await this.getOrThrow();
+
+  return _getSubTotal(cart.items);
+}
+
+async getTotal(): Promise<number> {
+  const summary = await this.evaluateModifiers();
+  return summary.total;
+}
+
+/** Get the number of distinct items in the cart */
+async getItemCount(): Promise<number> {
+  const cart = await this.getOrThrow();
+  return cart.items.length;
+}
+
+
+/** Get the total quantity of all items in the cart */
+async getTotalQuantity(): Promise<number> {
+  const cart = await this.getOrThrow();
+  const totalQty = cart.items.reduce((sum, item) => sum + item.quantity, 0);
+  return totalQty;
+}
+
+/** Get the quantity of a specific item by itemId */
+async getItemQuantity(itemId: string): Promise<number> {
+  const cart = await this.getOrThrow();
+  const item = cart.items.find(i => i.itemId.equals(itemId));
+  return item?.quantity || 0;
+}
+
+async getCartDetails() {
+  // 1. get cart detail
+  const cart = await this.getCart();
+  if (!cart) return false;
+
+  const cartData = cart.toObject();
+  const userId = cartData.user;
+  const sessionId = cartData.sessionId || null;
+  const items = cart.items || [];
+
+  // 2. Evaluate cart-level modifiers
+  const {
+    total,
+    subtotal,
+    modifiers,
+    differenceAmount,
+    differencePercent,
+  } = _evaluateCartModifiers(cart);
+
+  // 3. Return
+  return {
+    userId: userId || null,
+    sessionId,
+    subtotal,
+    total,
+    differenceAmount,
+    differencePercent,
+    items,
+    modifiers
+  };
+}
+
+
+
+
 //class BaseService end
 }

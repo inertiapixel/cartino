@@ -1,3 +1,5 @@
+import { I_CartModifier } from "./cartModel";
+
 export interface AppliedModifier {
     name: string | unknown;
     type: string;
@@ -11,6 +13,18 @@ export interface AppliedModifier {
     order?: number;
   }
   
+  export interface ModifierEvaluation {
+    differenceAmount: number;
+    differencePercent: number;
+    isFlat: boolean;
+    isPercent: boolean;
+    target: 'subtotal' | 'total';
+  }
+  
+  export type EvaluatedModifier = I_CartModifier & {
+    evaluation: ModifierEvaluation;
+  };
+
 export type ModifierValidationResult = {
   valid: boolean;
   details?: {

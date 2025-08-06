@@ -258,6 +258,56 @@ export type { I_Cart };
 
     ====moveTo====
     const result = await Cart.owner(userId).item(itemId).moveTo('save_for_later');
-    const result = await SaveForLater.owner(userId).item(itemId).moveTo('cart');
+    const result = await Cart.owner(userId).item(itemId).moveTo('cart');
+
+    ===============Cart level methods for modifiers========
+
+    const result = await Cart.owner(userId).applyModifier
+    const result = await Cart.owner(userId).removeModifier(modifier name)
+    const result = await Cart.owner(userId).removeModifierByType(modifier type)
+    const result = await Cart.owner(userId).clearModifiers()
+    const result = await Cart.owner(userId).getModifiers()
+    const result = await Cart.owner(userId).getModifier() // string or array
+    const result = await Cart.owner(userId).getModifiersByType() //string or array
+    
+    const result = await Cart.owner(userId).hasModifier({ name: "discount" });
+    const result = await Cart.owner(userId).hasModifier({ type: "shipping" });
+    const result = await Cart.owner(userId).hasModifier({ name: ["coupon", "gift"] });
+    const result = await Cart.owner(userId).hasModifier({ name: "tax", type: "service", match: "any" });
+    const result = await Cart.owner(userId).hasModifier({ name: "tax", type: "service", match: "all" });
+
+    const result = await Cart.owner(userId).reorderModifiers();
+    const result = await Cart.owner(userId).updateModifier(name,[data])
+
+    Cart.owner(userId).evaluateModifiers()
+
+    =============== end of art level methods for modifiers========
+
+    ======= Cart function =======
+    const result = await Cart.owner(userId).getContent()
+    const result = await Cart.owner(userId).getItemCount()
+    const result = await Cart.owner(userId).getTotal()
+    const result = await Cart.owner(userId).getSubTotal()
+
+    const result = await Cart.owner(userId).getTotalQuantity //get total item qty
+    const result = await Cart.owner(userId).getItemQuantity(itemId)
+
+    const result = await Cart.owner(userId).getCartDetails()
+
+    ======= end of Cart function =======
+
+    =========HOOKS=======
+    Hooks
+
+    cart.created
+    cart.adding
+    cart.added
+    cart.updating
+    cart.updated
+    cart.removing
+    cart.removed
+    cart.clearing
+    cart.cleared
+    =========end of HOOKS=======
 
 */ 
