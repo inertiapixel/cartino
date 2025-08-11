@@ -1,5 +1,19 @@
 import { I_Cart, I_CartModifier } from "../types/cartModel";
 
+export interface I_TimelineStep {
+  stage: "item-modifier" | "cart-modifier";
+  itemId?: string;
+  itemName?: string;
+  target: "subtotal" | "total" | undefined;
+  modifierName: string | undefined;
+  modifierType: string;
+  before: number;
+  after: number;
+  differenceAmount: number;
+  differencePercent: number;
+}
+
+
 /**
  * Format a number to fixed decimal places.
  * Always returns a number (not a string).
@@ -34,7 +48,8 @@ const applyModifier = (current: number, modifier: I_CartModifier) => {
 };
 
 export const _getCartDetails = (cart: I_Cart) => {
-  // Step 1: Process each item
+  const timeline: I_TimelineStep[] = [];
+
   const items = cart.items.map((item) => {
     const originalSubtotal = item.price * item.quantity;
     let subtotal = originalSubtotal;
@@ -48,11 +63,25 @@ export const _getCartDetails = (cart: I_Cart) => {
       const targetBase = mod.target === "total" ? total : subtotal;
       const effect = applyModifier(targetBase, mod);
 
+      // Push to timeline
+      timeline.push({
+        stage: "item-modifier",
+        itemId: item.itemId.toString(),
+        itemName: item.name,
+        target: mod.target,
+        modifierName: mod.name,
+        modifierType: mod.type,
+        before: effect.before,
+        after: effect.after,
+        differenceAmount: effect.differenceAmount,
+        differencePercent: effect.differencePercent
+      });
+
       if (mod.target === "total") {
         total = effect.after;
       } else {
         subtotal = effect.after;
-        total = subtotal; // reset total unless a later total modifier changes it
+        total = subtotal;
       }
 
       return {
@@ -76,14 +105,13 @@ export const _getCartDetails = (cart: I_Cart) => {
     };
   });
 
-  // Step 2: Aggregate cart-level totals before cart modifiers
+  // Cart-level modifiers
   const originalSubtotal = items.reduce((sum, it) => sum + it.originalSubtotal, 0);
   const originalTotal = items.reduce((sum, it) => sum + it.finalTotal, 0);
 
   let cartSubtotal = originalSubtotal;
   let cartTotal = originalTotal;
 
-  // Step 3: Apply cart-level modifiers
   const sortedCartModifiers = (cart.modifiers || [])
     .slice()
     .sort((a, b) => (a.order || 0) - (b.order || 0));
@@ -91,6 +119,18 @@ export const _getCartDetails = (cart: I_Cart) => {
   const cartLevelModifiersApplied = sortedCartModifiers.map((mod) => {
     const targetBase = mod.target === "total" ? cartTotal : cartSubtotal;
     const effect = applyModifier(targetBase, mod);
+
+    // Push to timeline
+    timeline.push({
+      stage: "cart-modifier",
+      target: mod.target,
+      modifierName: mod.name,
+      modifierType: mod.type,
+      before: effect.before,
+      after: effect.after,
+      differenceAmount: effect.differenceAmount,
+      differencePercent: effect.differencePercent
+    });
 
     if (mod.target === "total") {
       cartTotal = effect.after;
@@ -109,7 +149,6 @@ export const _getCartDetails = (cart: I_Cart) => {
     };
   });
 
-  // Step 4: Final summary
   const summary = {
     originalSubtotal,
     modifiedSubtotal: cartSubtotal,
@@ -132,6 +171,8 @@ export const _getCartDetails = (cart: I_Cart) => {
   return {
     summary,
     items,
-    cartLevelModifiersApplied
+    cartLevelModifiersApplied,
+    calculationTimeline: timeline
   };
 };
+

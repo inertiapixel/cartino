@@ -1169,15 +1169,16 @@ async evaluateModifiers(): Promise<{
 }
 
 async getSubTotal(): Promise<number> {
-  // const cart = await this.getOrThrow();
-
-  // return _getSubTotal(cart.items);
-  return 1;
+  const cartDetails = await this.getCartDetails();
+  if (!cartDetails) return 0;
+  return cartDetails.summary.modifiedSubtotal;
 }
 
+
 async getTotal(): Promise<number> {
-  const summary = await this.evaluateModifiers();
-  return summary.total;
+  const cartDetails = await this.getCartDetails();
+  if (!cartDetails) return 0; // or throw an error if cart must exist
+  return cartDetails.summary.finalTotal;
 }
 
 /** Get the number of distinct items in the cart */
@@ -1208,13 +1209,18 @@ async getCartDetails() {
   
 
   const cartData = cart.toObject();
-  // return cartData;
-  // const userId = cartData.user;
-  // const sessionId = cartData.sessionId || null;
+  const userId = cartData.user;
+  const sessionId = cartData.sessionId || null;
   // const items = cart.items || [];
 
   // 2. Evaluate cart-level modifiers
-  return _getCartDetails(cartData);
+  const cartDetails = _getCartDetails(cartData);
+
+  return {
+    userId,
+    sessionId,
+    ...cartDetails
+  }
 
 }
 
