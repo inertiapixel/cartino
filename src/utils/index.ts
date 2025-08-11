@@ -1,151 +1,137 @@
-import { Document } from "mongoose";
-import { I_Cart, I_CartItem, I_CartModifier } from "../types/cartModel";
-import { EvaluatedModifier } from "../types/modifier";
+import { I_Cart, I_CartModifier } from "../types/cartModel";
 
-export const _getSubTotal = (items: I_CartItem[]): number => {
-    const subtotal = items.reduce((sum, item) => {
-      const itemTotal = item.price * item.quantity;
-      return sum + itemTotal;
-    }, 0);
-  
-    return parseFloat(subtotal.toFixed(2));
-};  
+/**
+ * Format a number to fixed decimal places.
+ * Always returns a number (not a string).
+ */
+const toFixedNumber = (value: number, decimals = 2): number => {
+  return parseFloat(value.toFixed(decimals));
+};
 
-export function isMongooseDocument(mod: unknown): mod is Document {
-    return (
-      typeof mod === 'object' &&
-      mod !== null &&
-      'toObject' in mod &&
-      typeof (mod as Document).toObject === 'function'
-    );
-}
-  
-export const _evaluateCartModifiers = (
-  cart: I_Cart
-): {
-  total: number;
-  subtotal: number;
-  modifiers: EvaluatedModifier[];
-  differenceAmount: number;
-  differencePercent: number;
-} => {
-  const items = cart.items || [];
-  const cartLevelModifiers = cart.modifiers || [];
+const applyModifier = (current: number, modifier: I_CartModifier) => {
+  const before = current;
+  let after = before;
 
-  const evaluatedItemResults = items.map(item => _evaluateItemModifiers(item));
-  const modifiedItemTotals = evaluatedItemResults.map(r => r.modifiedTotal); 
+  const isPercent =
+    typeof modifier.value === "string" && modifier.value.trim().endsWith("%");
+  const numericValue =
+    typeof modifier.value === "number"
+      ? modifier.value
+      : parseFloat(modifier.value);
 
-  // 🧮 Subtotal is based on modified item prices
-  const subtotal = parseFloat(modifiedItemTotals.reduce((a, b) => a + b, 0).toFixed(2));
-
-  let total = subtotal;
-  const evaluatedModifiers: EvaluatedModifier[] = [];
-
-  // ➕ Add item-level evaluated modifiers to result
-  evaluatedItemResults.forEach((r) => {
-    evaluatedModifiers.push(...r.appliedModifiers);
-  });
-
-  // 🧮 Apply cart-level modifiers
-  const sortedCartMods = [...cartLevelModifiers].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-
-  for (const mod of sortedCartMods) {
-    const value = typeof mod.value === 'string' ? mod.value.trim() : mod.value.toString();
-    const operator = value.startsWith('-') ? 'subtract' : 'add';
-    const isPercent = value.includes('%');
-    const isFlat = !isPercent;
-
-    const numericValue = parseFloat(value.replace('%', '').replace('+', '').replace('-', ''));
-    if (isNaN(numericValue)) continue;
-
-    const amount = parseFloat(
-      (isPercent ? (total * numericValue) / 100 : numericValue).toFixed(2)
-    );
-    const finalAmount = operator === 'subtract' ? -amount : amount;
-    total = parseFloat((total + finalAmount).toFixed(2));
-
-    const differenceAmount = parseFloat(Math.abs(amount).toFixed(2));
-    const differencePercent =
-      subtotal !== 0 ? parseFloat(((differenceAmount / subtotal) * 100).toFixed(2)) : 0;
-
-    const baseModifier = isMongooseDocument(mod) ? mod.toObject() : mod;
-
-    evaluatedModifiers.push({
-      ...baseModifier,
-      evaluation: {
-        differenceAmount,
-        differencePercent,
-        isFlat,
-        isPercent,
-        target: mod.target ?? 'subtotal',
-      },
-    });
+  if (isPercent) {
+    after = before + (before * numericValue) / 100;
+  } else {
+    after = before + numericValue;
   }
 
-  const differenceAmount = parseFloat((subtotal - total).toFixed(2));
-  const differencePercent =
-    subtotal !== 0 ? parseFloat(((differenceAmount / subtotal) * 100).toFixed(2)) : 0;
-
   return {
-    total,
-    subtotal,
-    modifiers: evaluatedModifiers,
-    differenceAmount,
-    differencePercent,
+    before,
+    after,
+    differenceAmount: toFixedNumber(after - before),
+    differencePercent: toFixedNumber(((after - before) / before) * 100)
   };
 };
 
-export function _evaluateItemModifiers(item: I_CartItem): {
-    originalTotal: number;
-    modifiedTotal: number;
-    appliedModifiers: EvaluatedModifier[];
-  } {
-    const quantity = item.quantity;
-    const basePrice = item.price;
-    const originalTotal = basePrice * quantity;
-    let total = originalTotal;
-  
-    const appliedModifiers: EvaluatedModifier[] = [];
-  
-    const modifiers: I_CartModifier[] = (item.modifiers || []).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  
-    for (const mod of modifiers) {
-      const value = typeof mod.value === "string" ? mod.value.trim() : mod.value.toString();
-      const operator = value.startsWith("-") ? "subtract" : "add";
-      const isPercent = value.includes("%");
-      const isFlat = !isPercent;
-  
-      const numericValue = parseFloat(value.replace("%", "").replace("+", "").replace("-", ""));
-      if (isNaN(numericValue)) continue;
-  
-      const amount = parseFloat(
-        (isPercent ? (total * numericValue) / 100 : numericValue).toFixed(2)
-      );
-  
-      const finalAmount = operator === "subtract" ? -amount : amount;
-      total = parseFloat((total + finalAmount).toFixed(2));
-  
-      const differenceAmount = parseFloat(Math.abs(amount).toFixed(2));
-      const differencePercent =
-        originalTotal !== 0 ? parseFloat(((differenceAmount / originalTotal) * 100).toFixed(2)) : 0;
-  
-      const baseModifier = isMongooseDocument(mod) ? mod.toObject() : mod;
-  
-      appliedModifiers.push({
-        ...baseModifier,
-        evaluation: {
-          differenceAmount,
-          differencePercent,
-          isFlat,
-          isPercent,
-          target: mod.target ?? "subtotal",
-        },
-      });
-    }
-  
+export const _getCartDetails = (cart: I_Cart) => {
+  // Step 1: Process each item
+  const items = cart.items.map((item) => {
+    const originalSubtotal = item.price * item.quantity;
+    let subtotal = originalSubtotal;
+    let total = subtotal;
+
+    const sortedModifiers = (item.modifiers || [])
+      .slice()
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+    const modifiersApplied = sortedModifiers.map((mod) => {
+      const targetBase = mod.target === "total" ? total : subtotal;
+      const effect = applyModifier(targetBase, mod);
+
+      if (mod.target === "total") {
+        total = effect.after;
+      } else {
+        subtotal = effect.after;
+        total = subtotal; // reset total unless a later total modifier changes it
+      }
+
+      return {
+        name: mod.name,
+        type: mod.type,
+        order: mod.order,
+        target: mod.target,
+        value: mod.value,
+        effect
+      };
+    });
+
     return {
-      originalTotal,
-      modifiedTotal: total,
-      appliedModifiers,
+      itemId: item.itemId.toString(),
+      name: item.name,
+      quantity: item.quantity,
+      price: item.price,
+      originalSubtotal,
+      modifiersApplied,
+      finalTotal: total
     };
-  }
+  });
+
+  // Step 2: Aggregate cart-level totals before cart modifiers
+  const originalSubtotal = items.reduce((sum, it) => sum + it.originalSubtotal, 0);
+  const originalTotal = items.reduce((sum, it) => sum + it.finalTotal, 0);
+
+  let cartSubtotal = originalSubtotal;
+  let cartTotal = originalTotal;
+
+  // Step 3: Apply cart-level modifiers
+  const sortedCartModifiers = (cart.modifiers || [])
+    .slice()
+    .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+  const cartLevelModifiersApplied = sortedCartModifiers.map((mod) => {
+    const targetBase = mod.target === "total" ? cartTotal : cartSubtotal;
+    const effect = applyModifier(targetBase, mod);
+
+    if (mod.target === "total") {
+      cartTotal = effect.after;
+    } else {
+      cartSubtotal = effect.after;
+      cartTotal = cartSubtotal;
+    }
+
+    return {
+      name: mod.name,
+      type: mod.type,
+      order: mod.order,
+      target: mod.target,
+      value: mod.value,
+      effect
+    };
+  });
+
+  // Step 4: Final summary
+  const summary = {
+    originalSubtotal,
+    modifiedSubtotal: cartSubtotal,
+    originalTotal,
+    finalTotal: cartTotal,
+    totalDifference: toFixedNumber(cartTotal - originalTotal),
+    totalDifferencePercent: toFixedNumber(
+      ((cartTotal - originalTotal) / originalTotal) * 100
+    ),
+    totalItems: items.reduce((sum, it) => sum + it.quantity, 0),
+    totalUniqueItems: items.length,
+    totalModifiersCount:
+      items.reduce((sum, it) => sum + it.modifiersApplied.length, 0) +
+      cartLevelModifiersApplied.length,
+    isDiscountApplied: [...items.flatMap(it => it.modifiersApplied), ...cartLevelModifiersApplied]
+      .some(mod => (typeof mod.value === 'string' && mod.value.startsWith('-')) || (typeof mod.value === 'number' && mod.value < 0)),
+    finalTotalRounded: toFixedNumber(cartTotal)
+  };
+
+  return {
+    summary,
+    items,
+    cartLevelModifiersApplied
+  };
+};

@@ -4,7 +4,7 @@ import { getCartModel } from '../db/cartinoModel';
 import { EnrichedCartItem, I_Cart, I_CartItem, I_CartModifier } from '../types/cartModel';
 import { isModifierValid, normalizeModifier, validateModifierOrder, validateModifierTarget, validateModifierType, validateModifierValue } from '../utils/modifierUtils';
 import { AppliedModifier, ModifierValidationIssue } from '../types/modifier';
-import { _evaluateCartModifiers, _getSubTotal } from '../utils';
+import { _getCartDetails } from '../utils';
 
 interface AssociatedModel {
   modelName: string;
@@ -1169,9 +1169,10 @@ async evaluateModifiers(): Promise<{
 }
 
 async getSubTotal(): Promise<number> {
-  const cart = await this.getOrThrow();
+  // const cart = await this.getOrThrow();
 
-  return _getSubTotal(cart.items);
+  // return _getSubTotal(cart.items);
+  return 1;
 }
 
 async getTotal(): Promise<number> {
@@ -1204,32 +1205,17 @@ async getCartDetails() {
   // 1. get cart detail
   const cart = await this.getCart();
   if (!cart) return false;
+  
 
   const cartData = cart.toObject();
-  const userId = cartData.user;
-  const sessionId = cartData.sessionId || null;
-  const items = cart.items || [];
+  // return cartData;
+  // const userId = cartData.user;
+  // const sessionId = cartData.sessionId || null;
+  // const items = cart.items || [];
 
   // 2. Evaluate cart-level modifiers
-  const {
-    total,
-    subtotal,
-    modifiers,
-    differenceAmount,
-    differencePercent,
-  } = _evaluateCartModifiers(cart);
+  return _getCartDetails(cartData);
 
-  // 3. Return
-  return {
-    userId: userId || null,
-    sessionId,
-    subtotal,
-    total,
-    differenceAmount,
-    differencePercent,
-    items,
-    modifiers
-  };
 }
 
 
