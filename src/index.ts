@@ -1,22 +1,14 @@
 // cartino/src/index.ts
-import { Model } from 'mongoose';
-import { I_Cart } from './types/cartModel';
-import { setCartModel } from './db/cartinoModel';
+import './types/http';
 import { CartService } from './services/CartService';
-import { WishlistService } from './services/WishlistService';
 import { SaveForLaterService } from './services/SaveForLaterService';
+import { WishlistService } from './services/WishlistService';
+import { I_Cart } from './types/cartModel';
 
-// Initialize the Cartino module with your Mongoose model
-export function initCartino({ model }: { model: Model<I_Cart> }) {
-  setCartModel(model);
-}
-
-// Expose the services with a clean, chainable API
+export { createCartinoMiddleware } from './middleware/middleware';
 export const Cart = CartService;
 export const Wishlist = WishlistService;
 export const SaveForLater = SaveForLaterService;
-
-// Export types
 export type { I_Cart };
 
 /**
