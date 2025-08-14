@@ -5,7 +5,7 @@ import { SaveForLaterService } from './services/SaveForLaterService';
 import { WishlistService } from './services/WishlistService';
 import { I_Cart } from './types/cartModel';
 
-export { createCartinoMiddleware } from './middleware/middleware';
+export { createCartinoMiddleware } from './middleware';
 export const Cart = CartService;
 export const Wishlist = WishlistService;
 export const SaveForLater = SaveForLaterService;
