@@ -1,11 +1,13 @@
 // cartino/src/index.ts
 import './types/http';
+import { CartinoService } from './services/CartinoService';
 import { CartService } from './services/CartService';
 import { SaveForLaterService } from './services/SaveForLaterService';
 import { WishlistService } from './services/WishlistService';
 import { I_Cart } from './types/cartModel';
 
 export { createCartinoMiddleware } from './middleware';
+export const Cartino = CartinoService;
 export const Cart = CartService;
 export const Wishlist = WishlistService;
 export const SaveForLater = SaveForLaterService;

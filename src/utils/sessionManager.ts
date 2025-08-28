@@ -1,3 +1,4 @@
+//cartino/src/utils/sessionManager.ts
 import { Request, Response } from 'express';
 import { randomBytes } from 'crypto';
 
@@ -6,7 +7,6 @@ interface SessionOptions {
   res: Response;
   cookieName?: string;
   maxAgeDays?: number;
-  serverId?: string; // optional for multi-server setups
 }
 
 function generateCartinoSessionId(): string {
@@ -34,7 +34,6 @@ export function ensureCartinoSession({
   // Reuse existing cookie if available
   sessionId = cookies[cookieName] || '';
 
-  sessionId = generateCartinoSessionId();
   if (!sessionId) {
     sessionId = generateCartinoSessionId();
 
