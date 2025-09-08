@@ -1,5 +1,5 @@
 // cartino/src/index.ts
-import './types/http';
+// import './types/http';
 import { CartinoService } from './services/CartinoService';
 import { CartService } from './services/CartService';
 import { SaveForLaterService } from './services/SaveForLaterService';

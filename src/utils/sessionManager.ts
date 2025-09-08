@@ -1,15 +1,15 @@
 // cartino/src/utils/sessionManager.ts
 import { randomBytes } from "crypto";
 import { CookieManager } from "./cookieManager";
-import { Response, Request } from "express";
+import { CartinoRequest, CartinoResponse, CartinoSession } from "../types/cartino";
 
 function generateCartinoSessionId(): string {
   return `cartino_${randomBytes(6).toString("base64url")}`;
 }
 
 export interface SessionOptions {
-  req: Request;
-  res: Response;
+  req: CartinoRequest;
+  res: CartinoResponse;
   cookieName?: string;
   maxAgeDays?: number;
 }
@@ -17,31 +17,32 @@ export interface SessionOptions {
 export function ensureCartinoSession({
   req,
   res,
-  cookieName = "session",
+  cookieName = "sessionId",   // 🔁 unify with cookie naming
   maxAgeDays = 7,
-}: SessionOptions) {
+}: SessionOptions): CartinoSession {
   let sessionId = CookieManager.getCookie(req, cookieName);
-
   if (!sessionId) {
     sessionId = generateCartinoSessionId();
     CookieManager.setCookie(res, cookieName, sessionId, { maxAgeDays });
   }
 
-  req.cartino = {
+  // keep existing userId if present, otherwise rehydrate from cookie
+  const cookieUserId = CookieManager.getCookie(req, "userId");
+  const session: CartinoSession = {
     sessionId,
-    userId: req.cartino?.userId, // keep userId if already attached
+    userId: req.cartino?.userId ?? cookieUserId,
   };
 
-  return req.cartino;
+  req.cartino = session;
+  return session;
 }
 
 export function resetCartinoSession({
   res,
-  cookieName = "session",
+  cookieName = "sessionId",   // unify with cookie naming
   maxAgeDays = 7,
-}: Omit<SessionOptions, "req">) {
+}: Omit<SessionOptions, "req">): CartinoSession {
   const newSessionId = generateCartinoSessionId();
   CookieManager.setCookie(res, cookieName, newSessionId, { maxAgeDays });
-
   return { sessionId: newSessionId };
 }

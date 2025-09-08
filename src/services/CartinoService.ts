@@ -18,10 +18,13 @@ export class CartinoService {
     const sessionId = req?.cartino?.sessionId;
     CartinoValidator.validateSessionId(sessionId);
     CartinoValidator.validateUserId(userId);
+    
 
     // Normalize to ObjectId
     const userObjectId =
       typeof userId === "string" ? new Types.ObjectId(userId) : userId;
+
+      // console.log('userObjectId',userObjectId);
 
     const Cart = getCartModel();
 
@@ -39,6 +42,7 @@ export class CartinoService {
       userId: userObjectId.toString(),
     };
 
+    // console.log('req.cartino:', req.cartino);
     // Case 1: No guest cart → just return user cart (could be null if user had no cart)
     if (!guestCart) return userCart;
 

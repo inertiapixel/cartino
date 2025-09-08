@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 
 export interface CartinoSession {
-  sessionId: string;
+  sessionId?: string;
   userId?: string;
 }
 
