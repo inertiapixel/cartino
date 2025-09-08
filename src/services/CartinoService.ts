@@ -1,38 +1,62 @@
 // src/services/CartinoService.ts
-import { getCartModel } from '../db/cartinoModel';
-import { Types } from 'mongoose';
-import { CartinoValidator } from '../utils/CartinoValidator';
+import { getCartModel } from "../db/cartinoModel";
+import { Types } from "mongoose";
+import { CartinoValidator } from "../utils/CartinoValidator";
+import { CookieManager } from "../utils/cookieManager";
+import { CartinoRequest, CartinoResponse } from "../types/cartino";
 
 export class CartinoService {
-  static async mergeCarts(userId: string | unknown, sessionId: string | unknown) {
-    // 🔹 Validate inputs separately
+  /**
+   * Call right after a successful login.
+   * Ensures cookies are set and merges any guest cart into the user's cart.
+   */
+  static async mergeCart(req: CartinoRequest, res: CartinoResponse, userId: string | Types.ObjectId) {
+    if (!req || !res) {
+      throw new Error("Cartino.mergeCart requires both req and res");
+    }
+
+    const sessionId = req?.cartino?.sessionId;
     CartinoValidator.validateSessionId(sessionId);
     CartinoValidator.validateUserId(userId);
 
+    // Normalize to ObjectId
+    const userObjectId =
+      typeof userId === "string" ? new Types.ObjectId(userId) : userId;
+
     const Cart = getCartModel();
 
+    // Load guest + user carts
     const guestCart = await Cart.findOne({ sessionId, userId: null });
-    const userCart = await Cart.findOne({ userId });
+    const userCart = await Cart.findOne({ userId: userObjectId });
 
-    // Case 1: No guest cart, return user cart
+    // Update cookies: keep session; set userId
+    CookieManager.setCookie(res, "sessionId", sessionId!, { maxAgeDays: 7 });
+    CookieManager.setCookie(res, "userId", userObjectId.toString(), { maxAgeDays: 7 });
+
+    // Attach to req for downstream handlers in the SAME request
+    req.cartino = {
+      sessionId: sessionId!,
+      userId: userObjectId.toString(),
+    };
+
+    // Case 1: No guest cart → just return user cart (could be null if user had no cart)
     if (!guestCart) return userCart;
 
-    // Case 2: No user cart, upgrade guest → user
+    // Case 2: No user cart → upgrade guest → user
     if (!userCart) {
-      guestCart.userId =
-        typeof userId === "string" ? new Types.ObjectId(userId) : userId;
+      guestCart.userId = userObjectId;
       guestCart.sessionId = null;
       await guestCart.save();
       return guestCart;
     }
 
-    // Case 3: Merge guest into user cart
+    // Case 3: Merge guest cart into user cart
     for (const gItem of guestCart.items) {
       const existing = userCart.items.find(
         (uItem) => uItem.itemId.toString() === gItem.itemId.toString()
       );
       if (existing) {
-        existing.quantity += gItem.quantity; // merge quantity
+        existing.quantity += gItem.quantity;
       } else {
         userCart.items.push(gItem);
       }
@@ -42,5 +66,27 @@ export class CartinoService {
     await Cart.deleteOne({ _id: guestCart._id });
 
     return userCart;
+  }
+
+  /**
+   * Call right after logout.
+   * Removes userId cookie but keeps/refreshes session so guest cart continues to work.
+   */
+  static async detachUser(req: CartinoRequest, res: CartinoResponse) {
+    const sessionId = req?.cartino?.sessionId;
+    if (!sessionId) {
+      throw new Error("Cartino.detachUser requires an active session");
+    }
+
+    // Remove userId cookie
+    CookieManager.deleteCookie(res, "userId");
+
+    // Refresh session cookie so it remains valid for guest mode
+    CookieManager.setCookie(res, "sessionId", sessionId, { maxAgeDays: 7 });
+
+    // Reset req.cartino into guest mode
+    req.cartino = { sessionId, userId: undefined };
+
+    return { success: true, sessionId };
   }
 }

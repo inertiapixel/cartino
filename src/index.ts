@@ -7,6 +7,8 @@ import { WishlistService } from './services/WishlistService';
 import { I_Cart } from './types/cartModel';
 
 export { createCartinoMiddleware } from './middleware';
+export { resetCartinoSession } from './utils/sessionManager';
+
 export const Cartino = CartinoService;
 export const Cart = CartService;
 export const Wishlist = WishlistService;
