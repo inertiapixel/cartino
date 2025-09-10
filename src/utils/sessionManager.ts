@@ -1,11 +1,7 @@
 // cartino/src/utils/sessionManager.ts
-import { randomBytes } from "crypto";
 import { CookieManager } from "./cookieManager";
 import { CartinoRequest, CartinoResponse, CartinoSession } from "../types/cartino";
-
-function generateCartinoSessionId(): string {
-  return `cartino_${randomBytes(6).toString("base64url")}`;
-}
+import { generateCartinoSessionId } from "./session";
 
 export interface SessionOptions {
   req: CartinoRequest;
@@ -17,7 +13,7 @@ export interface SessionOptions {
 export function ensureCartinoSession({
   req,
   res,
-  cookieName = "sessionId",   // 🔁 unify with cookie naming
+  cookieName = "sessionId",   // unify with cookie naming
   maxAgeDays = 7,
 }: SessionOptions): CartinoSession {
   let sessionId = CookieManager.getCookie(req, cookieName);

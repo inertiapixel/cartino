@@ -4,6 +4,7 @@ import { Types } from "mongoose";
 import { CartinoValidator } from "../utils/CartinoValidator";
 import { CookieManager } from "../utils/cookieManager";
 import { CartinoRequest, CartinoResponse } from "../types/cartino";
+import { generateCartinoSessionId } from "../utils/session";
 
 export class CartinoService {
   /**
@@ -76,41 +77,27 @@ export class CartinoService {
    * Call right after logout.
    * Removes userId cookie but keeps/refreshes session so guest cart continues to work.
    */
-  static async detachUser1(req: CartinoRequest, res: CartinoResponse) {
-    const sessionId = req?.cartino?.sessionId;
-    if (!sessionId) {
-      throw new Error("Cartino.detachUser requires an active session");
-    }
-
-    // Remove userId cookie
-    CookieManager.deleteCookie(res, "userId");
-
-    // Refresh session cookie so it remains valid for guest mode
-    CookieManager.setCookie(res, "sessionId", sessionId, { maxAgeDays: 7 });
-
-    // Reset req.cartino into guest mode
-    req.cartino = { sessionId, userId: undefined };
-
-    return { success: true, sessionId };
-  }
-
   static async detachUser(req: CartinoRequest, res: CartinoResponse) {
-    const sessionId = req?.cartino?.sessionId;
+    const oldSessionId = req?.cartino?.sessionId;
   
-    if (!sessionId) {
+    if (!oldSessionId) {
       return { success: false, message: "No active session" };
     }
   
+    // Generate a new sessionId for guest mode
+    const newSessionId = generateCartinoSessionId();
+  
     // Remove userId cookie
     CookieManager.deleteCookie(res, "userId");
   
-    // Refresh session cookie so it remains valid for guest mode
-    CookieManager.setCookie(res, "sessionId", sessionId, { maxAgeDays: 7 });
+    // Set the new sessionId cookie
+    CookieManager.setCookie(res, "sessionId", newSessionId, { maxAgeDays: 7 });
   
     // Reset req.cartino into guest mode
-    req.cartino = { sessionId, userId: undefined };
+    req.cartino = { sessionId: newSessionId, userId: undefined };
   
-    return { success: true, sessionId };
+    return { success: true, sessionId: newSessionId };
   }
+  
   
 }
