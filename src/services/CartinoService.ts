@@ -76,7 +76,7 @@ export class CartinoService {
    * Call right after logout.
    * Removes userId cookie but keeps/refreshes session so guest cart continues to work.
    */
-  static async detachUser(req: CartinoRequest, res: CartinoResponse) {
+  static async detachUser1(req: CartinoRequest, res: CartinoResponse) {
     const sessionId = req?.cartino?.sessionId;
     if (!sessionId) {
       throw new Error("Cartino.detachUser requires an active session");
@@ -93,4 +93,24 @@ export class CartinoService {
 
     return { success: true, sessionId };
   }
+
+  static async detachUser(req: CartinoRequest, res: CartinoResponse) {
+    const sessionId = req?.cartino?.sessionId;
+  
+    if (!sessionId) {
+      return { success: false, message: "No active session" };
+    }
+  
+    // Remove userId cookie
+    CookieManager.deleteCookie(res, "userId");
+  
+    // Refresh session cookie so it remains valid for guest mode
+    CookieManager.setCookie(res, "sessionId", sessionId, { maxAgeDays: 7 });
+  
+    // Reset req.cartino into guest mode
+    req.cartino = { sessionId, userId: undefined };
+  
+    return { success: true, sessionId };
+  }
+  
 }

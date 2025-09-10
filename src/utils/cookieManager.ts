@@ -107,7 +107,36 @@ export const CookieManager = {
   /**
    * Delete cookie
    */
-  deleteCookie(res: CookieResponse, name: string): void {
-    res.setHeader("Set-Cookie", `${withPrefix(name)}=; Path=/; Max-Age=0`);
-  },
+  deleteCookie(res: CookieResponse, name: string, options: CookieOptions = {}): void {
+    const opts: Required<CookieOptions> = {
+      maxAgeDays: 0, // force immediate expiry
+      httpOnly: options.httpOnly ?? true,
+      secure: options.secure ?? isProd,
+      path: options.path ?? "/",
+      sameSite: options.sameSite ?? "Lax",
+    };
+  
+    const parts: string[] = [];
+    parts.push(`${withPrefix(name)}=`);
+    parts.push("Expires=Thu, 01 Jan 1970 00:00:00 GMT");
+    parts.push("Max-Age=0");
+    parts.push(`Path=${opts.path}`);
+    if (opts.httpOnly) parts.push("HttpOnly");
+    if (opts.secure) parts.push("Secure");
+    if (opts.sameSite) parts.push(`SameSite=${opts.sameSite}`);
+  
+    const cookie = parts.join("; ");
+  
+    const prev = res.getHeader("Set-Cookie");
+    if (prev) {
+      if (Array.isArray(prev)) {
+        res.setHeader("Set-Cookie", [...prev, cookie]);
+      } else {
+        res.setHeader("Set-Cookie", [prev.toString(), cookie]);
+      }
+    } else {
+      res.setHeader("Set-Cookie", cookie);
+    }
+  }
+  
 };
