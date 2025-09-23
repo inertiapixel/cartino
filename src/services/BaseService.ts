@@ -21,6 +21,12 @@ interface I_AddToCart {
   associatedModel?: AssociatedModel;
 }
 
+type BaseServiceStatic<T extends BaseService> = {
+  new (ownerId: string | Types.ObjectId): T;
+  resolveOwner(req?: CartinoRequest, fallbackOwnerId?: string): string | Types.ObjectId;
+  run<R>(fn: (service: T) => Promise<R>, req?: CartinoRequest, fallbackOwnerId?: string): Promise<R>;
+};
+
 export abstract class BaseService {
   protected owner: { userId?: Types.ObjectId; sessionId?: string };
   protected abstract instance: 'cart' | 'wishlist' | 'save_for_later';
@@ -46,7 +52,6 @@ export abstract class BaseService {
     }
   }
   
-
   public static resolveOwner(req?: CartinoRequest, fallbackOwnerId?: string): string | Types.ObjectId {
     console.log('req.cartinoreq.cartino::-',req?.cartino);
     if (req?.cartino?.userId) return req.cartino.userId;
@@ -54,136 +59,8 @@ export abstract class BaseService {
     if (fallbackOwnerId) return fallbackOwnerId;
   
     throw new Error(
-      "Cartino: Cannot resolve owner. Pass req from middleware or use Cart.owner(userId).method()"
+      "Cartino: Cannot resolve ownerId. Either pass req with cartino session or use Cart.owner(userId)"
     );
-  }
-  
-
-  static async add<T extends BaseService>(
-    this: { new (ownerId: string | Types.ObjectId): T; resolveOwner(req?: CartinoRequest, fallbackOwnerId?: string): string | Types.ObjectId },
-    params: I_AddToCart,
-    req?: CartinoRequest
-  ): Promise<I_Cart> {
-    const owner = this.resolveOwner(req);
-    console.log('add 1 ownerId', owner);
-    const service = new this(owner);
-    return await service.add(params);
-  }
-  
-  // In the same way, you can add edit/remove/clear etc.
-  // static async remove<T extends BaseService>(...) { ... }
-
-  // -------------------------------------------------
-  // Instance methods
-  // -------------------------------------------------
-  async add(params: I_AddToCart): Promise<I_Cart> {
-    const {
-      itemId,
-      quantity,
-      price,
-      name,
-      attributes = {},
-      associatedModel,
-    } = params;
-
-    const CartModel = getCartModel();
-
-    let cart = await this.getCart();
-    console.log("add 2 this.owner", this.owner);
-    if (!cart) {
-      cart = new CartModel({
-        ...this.owner,
-        instance: this.instance,
-        items: [],
-      }) as I_Cart;
-    }
-
-    const itemIdStr = itemId.toString();
-
-    const existingItem = cart.items.find(
-      (item) =>
-        item.itemId.toString() === itemIdStr &&
-        JSON.stringify(item.attributes || {}) === JSON.stringify(attributes)
-    );
-
-    if (existingItem) {
-      existingItem.quantity += quantity;
-    } else {
-      const newItem: I_CartItem = {
-        itemId: new Types.ObjectId(itemId),
-        name,
-        quantity,
-        price: parseFloat(price.toFixed(2)),
-        attributes,
-        associatedModel,
-      };
-
-      cart.items.push(newItem);
-    }
-
-    cart.updatedAt = new Date();
-    await cart.save();
-
-    return cart;
-  }
-
-  /**
-   * Adds an item to the cart/wishlist/saved list.
-   * If the item with same attributes exists, its quantity will be incremented.
-   * Otherwise, it adds a new entry to the cart.
-   *
-   * @param params - Item details including itemId, quantity, price, name, attributes, and associated model
-   * @returns Updated cart document
-   */
-  async add1(params: I_AddToCart): Promise<I_Cart> {
-    const {
-      itemId,
-      quantity,
-      price,
-      name,
-      attributes = {},
-      associatedModel,
-    } = params;
-
-    const CartModel = getCartModel();
-
-    let cart = await this.getCart();
-
-    if (!cart) {
-      cart = new CartModel({
-        ...this.owner,
-        instance: this.instance,
-        items: [],
-      }) as I_Cart;
-    }
-
-    const itemIdStr = itemId.toString();
-
-    const existingItem = cart.items.find(
-      item =>
-        item.itemId.toString() === itemIdStr &&
-        JSON.stringify(item.attributes || {}) === JSON.stringify(attributes)
-    );
-
-    if (existingItem) {
-      existingItem.quantity += quantity;
-    } else {
-      const newItem: I_CartItem = {
-        itemId: new Types.ObjectId(itemId),
-        name,
-        quantity,
-        price: parseFloat(price.toFixed(2)),
-        attributes,
-        associatedModel,
-      };
-
-      cart.items.push(newItem);
-    }
-
-    cart.updatedAt = new Date();
-    await cart.save();
-
-    return cart;
   }
 
   /** private functions for internal use only */
@@ -247,15 +124,207 @@ export abstract class BaseService {
   }
 
   /** end of private functions for internal use only */
+
+
+   /** --------------------------
+   * Shared helper for static methods
+   * -------------------------- */
+   public static async run<T extends BaseService, R>(
+    this: { new (ownerId: string | Types.ObjectId): T; resolveOwner(req?: CartinoRequest, fallbackOwnerId?: string): string | Types.ObjectId },
+    fn: (service: T) => Promise<R>,
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<R> {
+    const owner = this.resolveOwner(req, fallbackOwnerId);
+    const service: T = new this(owner); // type-safe
+    return await fn(service);
+  }
+  
+  /** --------------------------
+   * Static methods
+   * -------------------------- */
+  static add<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    params: I_AddToCart,
+    req?: CartinoRequest
+  ): Promise<I_Cart> {
+    return this.run((service: T) => service.add(params), req);
+  }
+
+  static isEmpty<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<boolean> {
+    return this.run((service) => service.isEmpty(), req, fallbackOwnerId);
+  }
+
+  static countItems<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<number> {
+    return this.run((service) => service.countItems(), req, fallbackOwnerId);
+  }
+
+  // static wrapper for countTotalQuantity
+  static async countTotalQuantity<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<number> {
+    return this.run(service => service.countTotalQuantity(), req, fallbackOwnerId);
+  }
+
+  // static wrapper for findItem
+  static async findItem<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    itemId: string | Types.ObjectId,
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<I_CartItem | undefined> {
+    return this.run(service => service.findItem(itemId), req, fallbackOwnerId);
+  }
+
+  static async remove<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    itemId: string | Types.ObjectId,
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<I_Cart> {
+    return this.run(service => service.remove(itemId), req, fallbackOwnerId);
+  }
+
+  static async update<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    itemId: string | Types.ObjectId,
+    updates: Partial<Omit<I_CartItem, 'itemId' | 'quantity'>> & { quantity?: number },
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<I_Cart> {
+    return this.run(service => service.update(itemId, updates), req, fallbackOwnerId);
+  }
+
+  // -------------------------------------------------
+  // Static wrapper for incrementQuantity
+  // -------------------------------------------------
+  static async incrementQuantity<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    value: number = 1,
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<I_Cart> {
+    return this.run(service => service.incrementQuantity(value), req, fallbackOwnerId);
+  }
+
+  // -------------------------------------------------
+  // Static wrapper for decrementQuantity
+  // -------------------------------------------------
+  static async decrementQuantity<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    value: number = 1,
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<I_Cart> {
+    return this.run(service => service.decrementQuantity(value), req, fallbackOwnerId);
+  }
+
+  // -------------------------------------------------
+  // Static wrapper for updateQuantity
+  // -------------------------------------------------
+  static async updateQuantity<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    itemId: string | Types.ObjectId,
+    input: number | { relative?: boolean; quantity: number },
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<I_Cart> {
+    return this.run(async service => service.item(itemId).updateQuantity(input), req, fallbackOwnerId);
+  }
+
+  // -------------------------------------------------
+  // Static wrapper for clear
+  // -------------------------------------------------
+  static async clear<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<I_Cart> {
+    return this.run(async service => service.clear(), req, fallbackOwnerId);
+  }
+  
+  // static async remove<T extends BaseService>(...) { ... }
+
+  // -------------------------------------------------
+  // Instance methods
+  // -------------------------------------------------
+  async add(params: I_AddToCart): Promise<I_Cart> {
+    const {
+      itemId,
+      quantity,
+      price,
+      name,
+      attributes = {},
+      associatedModel,
+    } = params;
+
+    const CartModel = getCartModel();
+
+    let cart = await this.getCart();
+    if (!cart) {
+      cart = new CartModel({
+        ...this.owner,
+        instance: this.instance,
+        items: [],
+      }) as I_Cart;
+    }
+
+    const itemIdStr = itemId.toString();
+
+    const existingItem = cart.items.find(
+      (item) =>
+        item.itemId.toString() === itemIdStr &&
+        JSON.stringify(item.attributes || {}) === JSON.stringify(attributes)
+    );
+
+    if (existingItem) {
+      existingItem.quantity += quantity;
+    } else {
+      const newItem: I_CartItem = {
+        itemId: new Types.ObjectId(itemId),
+        name,
+        quantity,
+        price: parseFloat(price.toFixed(2)),
+        attributes,
+        associatedModel,
+      };
+
+      cart.items.push(newItem);
+    }
+
+    cart.updatedAt = new Date();
+    await cart.save();
+
+    return cart;
+  }
+
+  // -------------------------------------------------
+  // Instance method
+  // -------------------------------------------------
   async isEmpty(): Promise<boolean> {
     const cart = await this.getCart();
     return !cart || cart.items.length === 0;
   }
 
+
+  // -------------------------------------------------
+  // Instance method
+  // -------------------------------------------------
   async countItems(): Promise<number> {
     const cart = await this.getOrThrow();
     return cart.items.length;
   }
+
 
   async countTotalQuantity(): Promise<number> {
     const cart = await this.getOrThrow();
@@ -396,44 +465,6 @@ async updateQuantity(
   cart.updatedAt = new Date();
   await cart.save();
   return cart;
-}
-
-/**
- * Retrieve all items in the current user's cart along with total price sum.
- * Must be chained after `.owner(userId)` to set the cart context.
- *
- * @returns An object containing cart items and price sum.
- * @throws Error if the cart is not found.
- *
- * @example
- * const { items, getPriceSum } = await Cart.owner(userId).getContent();
- * console.log('Cart Total:', getPriceSum);
- * 
- * Each item includes utility methods: `hasAttribute(key)` and `getAttribute(key)`.
- */
-async getContent1(): Promise<{
-  items: EnrichedCartItem[];
-  getPriceSum: number;
-}> {
-  const cart = await this.getOrThrow();
-
-  const items: EnrichedCartItem[] = cart.items.map((item) => {
-    const plainItem = item as I_CartItem;
-
-    return {
-      ...plainItem,
-      hasAttribute: (key: string): boolean =>
-        Object.prototype.hasOwnProperty.call(plainItem.attributes ?? {}, key),
-      getAttribute: (key: string): unknown =>
-        plainItem.attributes?.[key] ?? null,
-    };
-  });
-
-  const getPriceSum = items.reduce((sum, item) => {
-    return sum + (item.price ?? 0) * (item.quantity ?? 1);
-  }, 0);
-
-  return { items, getPriceSum };
 }
 
 /**
