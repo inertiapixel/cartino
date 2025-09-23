@@ -1,6 +1,6 @@
 // src/services/WishlistService.ts
-import { BaseService } from './BaseService';
 import { Types } from 'mongoose';
+import { BaseService } from './BaseService';
 
 export class WishlistService extends BaseService {
   protected instance = 'wishlist' as const;

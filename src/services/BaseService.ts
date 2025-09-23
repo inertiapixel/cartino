@@ -5,6 +5,7 @@ import { EnrichedCartItem, I_Cart, I_CartItem, I_CartModifier } from '../types/c
 import { isModifierValid, normalizeModifier, validateModifierOrder, validateModifierTarget, validateModifierType, validateModifierValue } from '../utils/modifierUtils';
 import { AppliedModifier, ModifierValidationIssue } from '../types/modifier';
 import { _getCartDetails } from '../utils';
+import { CartinoRequest } from '../types/cartino';
 
 interface AssociatedModel {
   modelName: string;
@@ -33,11 +34,156 @@ export abstract class BaseService {
    * @param ownerId - The unique identifier for the cart owner
    */
   protected constructor(ownerId: string | Types.ObjectId) {
-    if (Types.ObjectId.isValid(ownerId) && typeof ownerId !== 'string') {
-      this.owner = { userId: new Types.ObjectId(ownerId) };
+    if (typeof ownerId === "string") {
+      if (ownerId.startsWith("cartino_")) {
+        this.owner = { sessionId: ownerId };
+      } else {
+        this.owner = { userId: new Types.ObjectId(ownerId) };
+      }
     } else {
-      this.owner = { sessionId: String(ownerId) };
+      // direct ObjectId (already a Mongo ObjectId)
+      this.owner = { userId: ownerId };
     }
+  }
+  
+
+  public static resolveOwner(req?: CartinoRequest, fallbackOwnerId?: string): string | Types.ObjectId {
+    console.log('req.cartinoreq.cartino::-',req?.cartino);
+    if (req?.cartino?.userId) return req.cartino.userId;
+    if (req?.cartino?.sessionId) return req.cartino.sessionId;
+    if (fallbackOwnerId) return fallbackOwnerId;
+  
+    throw new Error(
+      "Cartino: Cannot resolve owner. Pass req from middleware or use Cart.owner(userId).method()"
+    );
+  }
+  
+
+  static async add<T extends BaseService>(
+    this: { new (ownerId: string | Types.ObjectId): T; resolveOwner(req?: CartinoRequest, fallbackOwnerId?: string): string | Types.ObjectId },
+    params: I_AddToCart,
+    req?: CartinoRequest
+  ): Promise<I_Cart> {
+    const owner = this.resolveOwner(req);
+    console.log('add 1 ownerId', owner);
+    const service = new this(owner);
+    return await service.add(params);
+  }
+  
+  // In the same way, you can add edit/remove/clear etc.
+  // static async remove<T extends BaseService>(...) { ... }
+
+  // -------------------------------------------------
+  // Instance methods
+  // -------------------------------------------------
+  async add(params: I_AddToCart): Promise<I_Cart> {
+    const {
+      itemId,
+      quantity,
+      price,
+      name,
+      attributes = {},
+      associatedModel,
+    } = params;
+
+    const CartModel = getCartModel();
+
+    let cart = await this.getCart();
+    console.log("add 2 this.owner", this.owner);
+    if (!cart) {
+      cart = new CartModel({
+        ...this.owner,
+        instance: this.instance,
+        items: [],
+      }) as I_Cart;
+    }
+
+    const itemIdStr = itemId.toString();
+
+    const existingItem = cart.items.find(
+      (item) =>
+        item.itemId.toString() === itemIdStr &&
+        JSON.stringify(item.attributes || {}) === JSON.stringify(attributes)
+    );
+
+    if (existingItem) {
+      existingItem.quantity += quantity;
+    } else {
+      const newItem: I_CartItem = {
+        itemId: new Types.ObjectId(itemId),
+        name,
+        quantity,
+        price: parseFloat(price.toFixed(2)),
+        attributes,
+        associatedModel,
+      };
+
+      cart.items.push(newItem);
+    }
+
+    cart.updatedAt = new Date();
+    await cart.save();
+
+    return cart;
+  }
+
+  /**
+   * Adds an item to the cart/wishlist/saved list.
+   * If the item with same attributes exists, its quantity will be incremented.
+   * Otherwise, it adds a new entry to the cart.
+   *
+   * @param params - Item details including itemId, quantity, price, name, attributes, and associated model
+   * @returns Updated cart document
+   */
+  async add1(params: I_AddToCart): Promise<I_Cart> {
+    const {
+      itemId,
+      quantity,
+      price,
+      name,
+      attributes = {},
+      associatedModel,
+    } = params;
+
+    const CartModel = getCartModel();
+
+    let cart = await this.getCart();
+
+    if (!cart) {
+      cart = new CartModel({
+        ...this.owner,
+        instance: this.instance,
+        items: [],
+      }) as I_Cart;
+    }
+
+    const itemIdStr = itemId.toString();
+
+    const existingItem = cart.items.find(
+      item =>
+        item.itemId.toString() === itemIdStr &&
+        JSON.stringify(item.attributes || {}) === JSON.stringify(attributes)
+    );
+
+    if (existingItem) {
+      existingItem.quantity += quantity;
+    } else {
+      const newItem: I_CartItem = {
+        itemId: new Types.ObjectId(itemId),
+        name,
+        quantity,
+        price: parseFloat(price.toFixed(2)),
+        attributes,
+        associatedModel,
+      };
+
+      cart.items.push(newItem);
+    }
+
+    cart.updatedAt = new Date();
+    await cart.save();
+
+    return cart;
   }
 
   /** private functions for internal use only */
@@ -99,7 +245,6 @@ export abstract class BaseService {
   
     return item;
   }
-  
 
   /** end of private functions for internal use only */
   async isEmpty(): Promise<boolean> {
@@ -127,64 +272,6 @@ export abstract class BaseService {
     return item;
   }
 
-  /**
-   * Adds an item to the cart/wishlist/saved list.
-   * If the item with same attributes exists, its quantity will be incremented.
-   * Otherwise, it adds a new entry to the cart.
-   *
-   * @param params - Item details including itemId, quantity, price, name, attributes, and associated model
-   * @returns Updated cart document
-   */
-  async add(params: I_AddToCart): Promise<I_Cart> {
-    const {
-      itemId,
-      quantity,
-      price,
-      name,
-      attributes = {},
-      associatedModel,
-    } = params;
-
-    const CartModel = getCartModel();
-
-    let cart = await this.getCart();
-
-    if (!cart) {
-      cart = new CartModel({
-        ...this.owner,
-        instance: this.instance,
-        items: [],
-      }) as I_Cart;
-    }
-
-    const itemIdStr = itemId.toString();
-
-    const existingItem = cart.items.find(
-      item =>
-        item.itemId.toString() === itemIdStr &&
-        JSON.stringify(item.attributes || {}) === JSON.stringify(attributes)
-    );
-
-    if (existingItem) {
-      existingItem.quantity += quantity;
-    } else {
-      const newItem: I_CartItem = {
-        itemId: new Types.ObjectId(itemId),
-        name,
-        quantity,
-        price: parseFloat(price.toFixed(2)),
-        attributes,
-        associatedModel,
-      };
-
-      cart.items.push(newItem);
-    }
-
-    cart.updatedAt = new Date();
-    await cart.save();
-
-    return cart;
-  }
   
   /**
    * Removes an item from the cart by its itemId.

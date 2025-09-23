@@ -2,8 +2,8 @@
 import { I_CartModifier } from '../types/cartModel';
 import { ModifierValidationResult } from '../types/modifier';
 import { isModifierValid } from '../utils/modifierUtils';
-import { BaseService } from './BaseService';
 import { Types } from 'mongoose';
+import { BaseService } from './BaseService';
 
 export class SaveForLaterService extends BaseService {
   protected instance = 'save_for_later' as const;

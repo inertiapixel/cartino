@@ -2,13 +2,13 @@
 import { I_CartModifier } from '../types/cartModel';
 import { ModifierValidationResult } from '../types/modifier';
 import { isModifierValid } from '../utils/modifierUtils';
-import { BaseService } from './BaseService';
 import { Types } from 'mongoose';
+import { BaseService } from './BaseService';
 
 export class CartService extends BaseService {
   protected instance = 'cart' as const;
 
-  private constructor(ownerId: string | Types.ObjectId) {
+  public constructor(ownerId: string | Types.ObjectId) {
     super(ownerId);
   }
 
