@@ -253,6 +253,159 @@ export abstract class BaseService {
     return this.run(async service => service.clear(), req, fallbackOwnerId);
   }
   
+  static async applyItemModifier<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    itemId: string | Types.ObjectId,
+    modifier: I_CartModifier,
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<I_Cart> {
+    return this.run(async service => {
+      service._itemId = new Types.ObjectId(itemId);
+      return service.applyItemModifier(modifier);
+    }, req, fallbackOwnerId);
+  }
+
+  static async applyModifierToAllItems<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    modifier: I_CartModifier,
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<I_Cart> {
+    return this.run(service => service.applyModifierToAllItems(modifier), req, fallbackOwnerId);
+  }
+  
+  static async removeItemModifier<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    itemId: string | Types.ObjectId,
+    modifierName: string,
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<I_Cart> {
+    return this.run(
+      service => service.item(itemId).removeItemModifier(modifierName),
+      req,
+      fallbackOwnerId
+    );
+  }
+
+  static async clearItemModifiers<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    itemId: string | Types.ObjectId,
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<I_Cart> {
+    return this.run(
+      service => service.item(itemId).clearItemModifiers(),
+      req,
+      fallbackOwnerId
+    );
+  }
+  
+  static async getItemModifiers<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    itemId: string | Types.ObjectId,
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<I_CartModifier[]> {
+    return this.run(
+      service => service.item(itemId).getItemModifiers(),
+      req,
+      fallbackOwnerId
+    );
+  }
+
+  static async getItemModifierByName<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    itemId: string | Types.ObjectId,
+    name: string,
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<I_CartModifier | undefined>;
+  
+  static async getItemModifierByName<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    itemId: string | Types.ObjectId,
+    names: string[],
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<I_CartModifier[]>;
+  
+  static async getItemModifierByName<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    itemId: string | Types.ObjectId,
+    nameOrNames: string | string[],
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<I_CartModifier | undefined | I_CartModifier[]> {
+    return this.run(
+      service => service.item(itemId).getItemModifierByName(nameOrNames as any),
+      req,
+      fallbackOwnerId
+    );
+  }
+  
+  static async getItemModifiersByType<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    itemId: string | Types.ObjectId,
+    typeOrTypes: string | string[],
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<I_CartModifier[]> {
+    return this.run(
+      service => service.item(itemId).getItemModifiersByType(typeOrTypes),
+      req,
+      fallbackOwnerId
+    );
+  }
+
+  static async hasItemModifier<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    itemId: string | Types.ObjectId,
+    filter: {
+      name?: string | string[];
+      type?: string | string[];
+      match?: 'any' | 'all';
+    },
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<boolean> {
+    return this.run(
+      service => service.item(itemId).hasItemModifier(filter),
+      req,
+      fallbackOwnerId
+    );
+  }
+  
+  static async reorderItemModifiers<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    itemId: string | Types.ObjectId,
+    names: string[],
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<boolean> {
+    return this.run(
+      service => service.item(itemId).reorderItemModifiers(names),
+      req,
+      fallbackOwnerId
+    );
+  }
+
+  static async updateItemModifier<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    itemId: string | Types.ObjectId,
+    name: string,
+    modifier: Partial<I_CartModifier>,
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<I_Cart> {
+    return this.run(
+      service => service.item(itemId).updateItemModifier(name, modifier),
+      req,
+      fallbackOwnerId
+    );
+  }
+  
   // static async remove<T extends BaseService>(...) { ... }
 
   // -------------------------------------------------
