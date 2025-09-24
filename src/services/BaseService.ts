@@ -405,6 +405,53 @@ export abstract class BaseService {
       fallbackOwnerId
     );
   }
+
+  static async evaluateItemModifiers<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    itemId: string | Types.ObjectId,
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<{
+    subtotal: number;
+    total: number;
+    differenceAmount: number;
+    differencePercent: number;
+    appliedModifiers: AppliedModifier[];
+  }> {
+    return this.run(
+      service => service.item(itemId).evaluateItemModifiers(),
+      req,
+      fallbackOwnerId
+    );
+  }
+  
+  static async getItemSubTotal<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    itemId: string | Types.ObjectId,
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<number> {
+    return this.run(service => service.item(itemId).getItemSubTotal(), req, fallbackOwnerId);
+  }
+
+  static async getItemTotal<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    itemId: string | Types.ObjectId,
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<number> {
+    return this.run(service => service.item(itemId).getItemTotal(), req, fallbackOwnerId);
+  }
+
+  static async moveTo<T extends BaseService>(
+    this: BaseServiceStatic<T>,
+    itemId: string | Types.ObjectId,
+    target: 'cart' | 'save_for_later',
+    req?: CartinoRequest,
+    fallbackOwnerId?: string
+  ): Promise<I_Cart> {
+    return this.run(service => service.item(itemId).moveTo(target), req, fallbackOwnerId);
+  }
   
   // static async remove<T extends BaseService>(...) { ... }
 
