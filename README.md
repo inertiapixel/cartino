@@ -101,6 +101,7 @@ MIT © [inertiapixel](https://github.com/inertiapixel)
 ## Related Projects
 
 - [`@inertiapixel/nextjs-auth`](https://github.com/inertiapixel/nextjs-auth) — Frontend auth package for React/Next.js
+- [`@inertiapixel/nextjs-auth`](https://github.com/inertiapixel/nodejs-auth) — Backend auth package for Nodejs / Express Js / TypeScript
 - [`@inertiapixel/react-icons`](https://github.com/inertiapixel/react-icons) — React icons set
 
 
