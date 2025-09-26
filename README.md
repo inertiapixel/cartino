@@ -71,19 +71,19 @@ This will generate:
 ### Setup in your server
 Import the library and middleware in your index.ts or server.ts:
 
-```bash
+```ts
 import { Cartino, cartinoMiddleware } from './lib/cartino';
 
 app.use(cartinoMiddleware);
 ```
 
 Merge guest cart with authenticated user (call after login success):
-```bash
+```ts
 await Cartino.mergeCart(req, res, user._id);
 ```
 
 Detach user session (call after logout):
-```bash
+```ts
 await Cartino.detachUser(req, res);
 ```
 
@@ -100,7 +100,7 @@ After completing the installation and setup, you can start using Cartino right a
 #### IMPORTANT NOTE
 
 **How req.cartino works**
-```bash
+```ts
 const { userId, sessionId } = req.cartino;
 ```
 - **userId**
@@ -122,7 +122,7 @@ Almost every method in `Cart`, `Wishlist`, or `SaveForLater` can be used with or
 ### Add item to Cart
 Cartino supports two ways of adding items:
 #### 1. With Session/User Owner (no login required)
-```bash
+```ts
 import { Cart } from '@/lib/cartino';
 
 const product = await Product.findById(itemId).lean();
@@ -138,7 +138,7 @@ await Cart.owner(sessionId).add({
     sku: product.variant.sku,
     slug: product.slug,
     image: product.variant.image,
-  },
+  }, //attributes is optional
   associatedModel: {
     modelName: "Product",
     data: product, // keep product data linked
@@ -149,7 +149,7 @@ await Cart.owner(sessionId).add({
 
 #### 2. Without Owner (Auto-pick from session req.cartino)
 
-```bash
+```ts
 import { Cart } from '@/lib/cartino';
 const product = await Product.findById(itemId).lean();
 
@@ -163,11 +163,11 @@ await Cart.add({
     sku: product.variant.sku,
     slug: product.slug,
     image: product.variant.image,
-  },
+  }, //attributes is optional
   associatedModel: {
     modelName: "Product",
     data: product,
-  }
+  } //associating of model with cart is optional
 }, req);
 
 ```
@@ -186,7 +186,7 @@ associatedModel: {
 Just like `Cart`, you can manage Wishlist and SaveForLater items with the same API style.
 
 #### Add to Wishlist
-```bash
+```ts
 await Wishlist.owner(sessionId).add({
   itemId: product._id,
   name: product.name,
@@ -202,7 +202,7 @@ await Wishlist.add({
 ```
 
 #### Add to SaveForLater
-```bash
+```ts
 await SaveForLater.owner(sessionId).add({
   itemId: product._id,
   name: product.name,
@@ -217,7 +217,7 @@ await SaveForLater.add({
 }, req);
 ```
 ### Update
-```bash
+```ts
 await Cart.owner(sessionId).update(itemId, {
       quantity,
       name: product.name,
@@ -233,19 +233,32 @@ await Cart.update(itemId, {
 
 ```
 ### Remove
-```bash
-await Cart.owner(sessionId).remove(itemId, req);
+```ts
+await Cart.owner(sessionId).remove(itemId);
 
 // OR with request auto-detection
 await Cart.remove(itemId, req);
 ```
 >Just swap `Cart` with `Wishlist` or `SaveForLater` — methods remain identical.
 
+### isEmpty
+
+```ts
+/**
+ * Check if the cart is empty.
+ *
+ * @return boolean
+ */
+await Cart.isEmpty(sessionId);
+await Cart.isEmpty(req);
+
+```
+
 ## Move Items Between Lists
 
 You can easily move items between Cart, SaveForLater, and Wishlist.
 
-```bash
+```ts
 // Move item from Cart → SaveForLater
 const movedToSFL = await Cart.owner(userId).item(itemId).moveTo('save_for_later');
 const movedToSFL1 = await Cart.item(itemId).moveTo('save_for_later', req);
@@ -267,7 +280,7 @@ const movedFromWishlist1 = await Wishlist.item(itemId).moveTo('cart', req);
 - Automatically removes the item from the source list after moving.
 
 ## Get Cart Details
-```bash
+```ts
 await Cart.getCartDetails(req);
 ```
 ## Modifiers
@@ -283,8 +296,8 @@ Modifiers applied to **specific cart items**.
 
 - **Examples:** `"10% Off"`, `"Gift Wrap"`, `"Extra Warranty"`.
 - **Usage:**
-```ts
 
+```ts
 // Apply modifier
 await Cart.item(itemId).applyItemModifier({
       name: 'Shipping Cost',
