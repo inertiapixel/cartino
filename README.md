@@ -268,6 +268,76 @@ const movedFromWishlist1 = await Wishlist.item(itemId).moveTo('cart', req);
 ```bash
 await Cart.getCartDetails(req);
 ```
+## Modifiers
+
+Cartino supports **modifiers**, which allow you to apply discounts, fees, or other adjustments to **items** or the **entire cart**. Modifiers provide flexibility for promotions, extra services, and custom pricing logic.
+
+There are **two types of modifiers**:
+
+---
+
+### 1. Item-Level Modifiers
+Modifiers applied to **specific cart items**.
+
+- **Examples:** `"10% Off"`, `"Gift Wrap"`, `"Extra Warranty"`.
+- **Usage:**
+```ts
+
+// Apply modifier
+await Cart.item(itemId).applyItemModifier({
+      name: 'Shipping Cost',
+      value: -200,
+      type: 'shipping',
+      target: 'total',
+      order: 2,
+      metadata: { region: 'North America', key_1:'value 1' }
+    }, req);
+
+// Remove a modifier
+await Cart.item(itemId).removeItemModifier("Shipping Cost");
+
+// Update a modifier
+await Cart.item(itemId).updateItemModifier("Gift Wrap", { name: "Premium Gift Wrap" });
+
+// Reorder modifiers
+await Cart.item(itemId).reorderItemModifiers(["Gift Wrap", "10% Off"]);
+
+// Get modifiers
+const modifiers = await Cart.item(itemId).getItemModifiers();
+const specificModifier = await Cart.item(itemId).getItemModifierByName("Gift Wrap");
+const hasModifier = await Cart.item(itemId).hasItemModifier({ type: "discount", name: "10% Off" });
+```
+
+### 1. Cart-Level Modifiers
+Modifiers applied to the entire cart.
+
+**Examples:** `"Black Friday Discount"`, `"Shipping Fee"`.
+
+- **Usage:**
+```ts
+await Cart.applyModifier({ type: "discount", name: "Black Friday 20%" });
+// Remove a modifier
+await Cart.removeModifier("Black Friday 20%");
+
+// Remove by type
+await Cart.removeModifierByType("shipping");
+
+// Clear all modifiers
+await Cart.clearModifiers();
+
+// Reorder modifiers
+await Cart.reorderModifiers(["Black Friday 20%", "Express Shipping"]);
+
+// Get modifiers
+const modifiers = await Cart.getModifiers();
+const specificModifiers = await Cart.getModifier(["Black Friday 20%", "Express Shipping"]);
+const hasDiscount = await Cart.hasModifier({ type: "discount" });
+const tax = await Cart.owner(userId).getModifierByType('tax');
+const taxes = await Cart.owner(userId).getModifierByType(['TAX 1', 'TAX 2']);
+
+```
+
+---
 
 ## License
 
