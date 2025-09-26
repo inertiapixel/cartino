@@ -249,9 +249,59 @@ await Cart.remove(itemId, req);
  *
  * @return boolean
  */
-await Cart.isEmpty(sessionId);
+await Cart.owner(sessionId).isEmpty();
 await Cart.isEmpty(req);
 
+```
+### countItems
+
+```ts
+/**
+ * Get the number of distinct items in the cart (ignores quantity).
+ *
+ * @return number
+ */
+await Cart.owner(sessionId).countItems();
+await Cart.countItems(req);
+```
+
+### countTotalQuantity
+
+```ts
+/**
+ * Get the total quantity of all items in the cart.
+ * (e.g., 2 of Product A + 3 of Product B = 5)
+ *
+ * @return number
+ */
+await Cart.owner(sessionId).countTotalQuantity();
+await Cart.countTotalQuantity(req);
+```
+### incrementQuantity
+
+```ts
+/**
+ * Increase the quantity of a specific cart item by a given value.
+ *
+ * @param value - Number to increment the quantity by (default is 1)
+ * @returns Updated cart document
+ */
+await Cart.owner(sessionId).item(itemId).incrementQuantity(2);
+await Cart.item(itemId).incrementQuantity(2, req);
+```
+
+### decrementQuantity
+
+```ts
+/**
+ * Decrease the quantity of a specific cart item by a given value.
+ * If the resulting quantity is 0 or less, the item will be removed.
+ *
+ * @param value - Number to decrement the quantity by (default is 1)
+ * @returns Updated cart document
+ */
+await Cart.owner(sessionId).item(itemId).decrementQuantity(1);
+await Cart.item(itemId).decrementQuantity(1, req);
 ```
 
 ## Move Items Between Lists
