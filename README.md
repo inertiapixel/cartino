@@ -150,6 +150,49 @@ await Cart.add({
 - Use Cart.owner(sessionId) when you have a user/session id.
 - Use Cart.add(..., req) when you want Cartino to pull the session id automatically from req.
 
+Bonus: You can associate the full product model for future reference and its optional:
+```ts
+associatedModel: {
+  modelName: "Product",
+  data: product
+}
+```
+
+### ❤️ Wishlist & 🕒 Save For Later
+Just like `Cart`, you can manage Wishlist and SaveForLater items with the same API style.
+
+#### Add to Wishlist
+```bash
+await Wishlist.owner(sessionId).add({
+  itemId: product._id,
+  name: product.name,
+  price: product.price
+});
+
+// OR with request auto-detection
+await Wishlist.add({
+  itemId: product._id,
+  name: product.name,
+  price: product.price
+}, req);
+```
+
+#### Add to SaveForLater
+```bash
+await SaveForLater.owner(sessionId).add({
+  itemId: product._id,
+  name: product.name,
+  price: product.price
+});
+
+// OR with request auto-detection
+await SaveForLater.add({
+  itemId: product._id,
+  name: product.name,
+  price: product.price
+}, req);
+```
+
 ## License
 
 MIT © [inertiapixel](https://github.com/inertiapixel)
