@@ -308,10 +308,10 @@ const specificModifier = await Cart.item(itemId).getItemModifierByName("Gift Wra
 const hasModifier = await Cart.item(itemId).hasItemModifier({ type: "discount", name: "10% Off" });
 ```
 
-### 1. Cart-Level Modifiers
+### 2. Cart-Level Modifiers
 Modifiers applied to the entire cart.
 
-**Examples:** `"Black Friday Discount"`, `"Shipping Fee"`.
+- **Examples:** `"Black Friday Discount"`, `"Shipping Fee"`.
 
 - **Usage:**
 ```ts
