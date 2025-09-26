@@ -92,6 +92,64 @@ await Cartino.detachUser(req, res);
 
 ### Cartino is successfully installed and set up!
 
+---
+## Quick Start
+After completing the installation and setup, you can start using Cartino right away.
+### Add item to Cart
+Cartino supports two ways of adding items:
+#### 1. With Session/User Owner (no login required)
+```bash
+import { Cart } from '@/lib/cartino';
+
+const product = await Product.findById(itemId).lean();
+const sessionId = req.cartino.sessionId;
+
+await Cart.owner(sessionId).add({
+  itemId: product._id,
+  quantity: 2,
+  price: product.price,
+  name: product.name,
+  attributes: {
+    variantId: product.variant._id,
+    sku: product.variant.sku,
+    slug: product.slug,
+    image: product.variant.image,
+  },
+  associatedModel: {
+    modelName: "Product",
+    data: product, // keep product data linked
+  } //associating of model with cart is optional
+});
+
+```
+
+#### 2. Without Owner (Auto-pick from session req.cartino)
+
+```bash
+import { Cart } from '@/lib/cartino';
+const product = await Product.findById(itemId).lean();
+
+await Cart.add({
+  itemId: product._id,
+  quantity: 2,
+  price: product.price,
+  name: product.name,
+  attributes: {
+    variantId: product.variant._id,
+    sku: product.variant.sku,
+    slug: product.slug,
+    image: product.variant.image,
+  },
+  associatedModel: {
+    modelName: "Product",
+    data: product,
+  }
+}, req);
+
+```
+- Use Cart.owner(sessionId) when you have a user/session id.
+- Use Cart.add(..., req) when you want Cartino to pull the session id automatically from req.
+
 ## License
 
 MIT © [inertiapixel](https://github.com/inertiapixel)
