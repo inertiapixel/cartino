@@ -95,6 +95,29 @@ await Cartino.detachUser(req, res);
 ---
 ## Quick Start
 After completing the installation and setup, you can start using Cartino right away.
+
+#### IMPORTANT NOTE
+
+**How req.cartino works**
+```bash
+const { userId, sessionId } = req.cartino;
+```
+- **userId**
+  - **Guest:** Returns `undefined` if the user is not logged in.
+  - **Logged-in:** The `_id` of the currently logged-in user.
+
+- **sessionId**
+  - A unique session identifier, e.g., `cartino_ABCXYZ`. Always present, even for guests.
+  - After logout, the `sessionId` is rotated to a new value.
+
+**Using .owner(sessionId) vs Without**
+
+Almost every method in `Cart`, `Wishlist`, or `SaveForLater` can be used with or without `.owner(sessionId)`.
+
+- **With** `.owner(sessionId)` → Explicitly works with a specific user's cart/session.
+
+- **Without** `.owner(sessionId)` → Automatically resolves the cart using the request/session (you must pass req as the last argument).
+
 ### Add item to Cart
 Cartino supports two ways of adding items:
 #### 1. With Session/User Owner (no login required)
@@ -192,6 +215,55 @@ await SaveForLater.add({
   price: product.price
 }, req);
 ```
+### Update
+```bash
+await Cart.owner(sessionId).update(itemId, {
+      quantity,
+      name: product.name,
+      price: product.price
+});
+
+// OR with request auto-detection
+await Cart.update(itemId, {
+      quantity,
+      name: product.name,
+      price: product.price
+}, req);
+
+```
+### Remove
+```bash
+await Cart.owner(sessionId).remove(itemId, req);
+
+// OR with request auto-detection
+await Cart.remove(itemId, req);
+```
+>Just swap `Cart` with `Wishlist` or `SaveForLater` — methods remain identical.
+
+## Move Items Between Lists
+
+You can easily move items between Cart, SaveForLater, and Wishlist.
+
+```bash
+// Move item from Cart → SaveForLater
+const movedToSFL = await Cart.owner(userId).item(itemId).moveTo('save_for_later');
+const movedToSFL1 = await Cart.item(itemId).moveTo('save_for_later', req);
+
+// Move item from SaveForLater → Cart
+const movedToCart = await SaveForLater.owner(userId).item(itemId).moveTo('cart');
+const movedToCart1 = await SaveForLater.item(itemId).moveTo('cart', req);
+
+// Move item from Cart → Wishlist
+const movedToWishlist = await Cart.owner(userId).item(itemId).moveTo('wishlist', req);
+const movedToWishlist1 = await Cart.item(itemId).moveTo('wishlist');
+
+// Move item from Wishlist → Cart
+const movedFromWishlist = await Wishlist.owner(userId).item(itemId).moveTo('cart');
+const movedFromWishlist1 = await Wishlist.item(itemId).moveTo('cart', req);
+```
+
+- Keeps the same itemId, attributes, and associated model when moving.
+- Automatically removes the item from the source list after moving.
 
 ## License
 
