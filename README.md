@@ -36,6 +36,8 @@ So, I created my own under the inertiapixel scope to work seamlessly together.
 
 ## Features
 
+Cartino ships with 50+ useful methods that help developers manage cart operations seamlessly.
+
 - Simple and intuitive API for cart management
 - Chainable methods (`add()`, `remove()`, `update()`, `clear()` etc...)
 - Automatic subtotal and total calculation
@@ -336,7 +338,6 @@ const tax = await Cart.owner(userId).getModifierByType('tax');
 const taxes = await Cart.owner(userId).getModifierByType(['TAX 1', 'TAX 2']);
 
 ```
-
 ---
 
 ## License
