@@ -2,8 +2,7 @@
   <br/>
   <a href="https://www.inertiapixel.com/" target="_blank"><img width="150px" src="https://www.inertiapixel.com/images/logo-min.svg" /></a>
   <h3 align="center">@inertiapixel/cartino</h3>
-  <p align="center">Node.js + Next.js Auth for MERN</p>
-  <p align="center">Open Source. Full Stack</p>
+  <p align="center">Open Source</p>
 </p>
 
 **InertiaPixel Cartino** is a lightweight, easy-to-use cart management system for Node.js and Mongoose. It allows quick integration of cart functionality in e-commerce apps with features like adding, updating, removing items, and calculating totals. Fast, flexible, and perfect for simple or complex e-commerce sites.
@@ -265,6 +264,11 @@ const movedFromWishlist1 = await Wishlist.item(itemId).moveTo('cart', req);
 - Keeps the same itemId, attributes, and associated model when moving.
 - Automatically removes the item from the source list after moving.
 
+## Get Cart Details
+```bash
+await Cart.getCartDetails(req);
+```
+
 ## License
 
 MIT © [inertiapixel](https://github.com/inertiapixel)
@@ -274,7 +278,7 @@ MIT © [inertiapixel](https://github.com/inertiapixel)
 ## Related Projects
 
 - [`@inertiapixel/nextjs-auth`](https://github.com/inertiapixel/nextjs-auth) — Frontend auth package for React/Next.js
-- [`@inertiapixel/nextjs-auth`](https://github.com/inertiapixel/nodejs-auth) — Backend auth package for Nodejs / Express Js / TypeScript
+- [`@inertiapixel/nodejs-auth`](https://github.com/inertiapixel/nodejs-auth) — Backend auth package for Nodejs / Express Js / TypeScript
 - [`@inertiapixel/react-icons`](https://github.com/inertiapixel/react-icons) — React icons set
 
 
