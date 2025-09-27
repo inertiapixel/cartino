@@ -672,25 +672,84 @@ await Cart.item(itemId).evaluateItemModifiers(req);
 | `order?`            | `number`                | Order of application                            |
 
 
-```ts
-// Update a modifier
-await Cart.item(itemId).updateItemModifier("Gift Wrap", { name: "Premium Gift Wrap" });
-
-// Reorder modifiers
-await Cart.item(itemId).reorderItemModifiers(["Gift Wrap", "10% Off"]);
-
-// Get modifiers
-const modifiers = await Cart.item(itemId).getItemModifiers();
-const specificModifier = await Cart.item(itemId).getItemModifierByName("Gift Wrap");
-const hasModifier = await Cart.item(itemId).hasItemModifier({ type: "discount", name: "10% Off" });
-```
-
 ### 2. Cart-Level Modifiers
 Modifiers applied to the entire cart.
 
 - **Examples:** `"Black Friday Discount"`, `"Shipping Fee"`.
 
 - **Usage:**
+
+### applyModifier
+```ts
+
+/**
+ * Apply a modifier (discount, tax, fee, coupon, etc.) at the **cart level**.
+ *
+ * Cart-level modifiers affect the entire cart instead of individual items.
+ * Each modifier is validated, normalized, and auto-assigned an order if missing.
+ * Duplicate modifiers (same name + type) are not allowed.
+ *
+ * @param modifier - Modifier object to apply. Must include:
+ *   - name   {string}             Unique identifier (e.g., "Discount10").
+ *   - type   {string}             Modifier type (e.g., "discount", "tax", "fee").
+ *   - value  {string | number}    Modifier value (supports flat or percentage).
+ *                                 Example: 100, -50, "10%", "-5%".
+ *   - target {"subtotal"|"total"} (optional) Defaults to "subtotal".
+ *   - order  {number}             (optional) Application order, auto-incremented if missing.
+ *   - metadata : any key value pair
+ */
+
+// Apply a 10% discount at cart level
+await Cart.owner(userId).applyModifier({
+  type: "discount",
+  value: "10%"
+});
+
+// Apply a fixed shipping fee
+await Cart.owner(userId).applyModifier({
+  type: "fee",
+  value: 50
+});
+
+// Trying to apply the same modifier again will throw an error
+await Cart.applyItemModifier({
+        name: 'GST',
+        type: 'TAX',
+        value: '600',
+        order: 3,
+        target: 'total',
+        metadata: {
+          source: 'tax',
+          campaignId: 'add'
+        //any key value
+        }
+      }, req);
+
+```
+
+### removeModifier
+```ts
+//remove modifer by name
+await Cart.owner(userId).removeModifier('GST');
+await Cart.removeModifier('GST', req);
+```
+
+### removeModifierByType
+```ts
+// remove modifier by tye
+await Cart.owner(userId).removeModifier('tax');
+await Cart.removeModifier('tax', req);
+```
+
+### clearModifiers
+```ts
+// clear all modifiers on cart level
+await Cart.owner(userId).clearModifiers();
+await Cart.clearModifiers(req);
+```
+
+
+
 ```ts
 await Cart.applyModifier({ type: "discount", name: "Black Friday 20%" });
 // Remove a modifier
