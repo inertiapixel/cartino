@@ -348,7 +348,7 @@ await Cart.item(itemId).getItemSubTotal(req);
 await Cart.owner(sessionId).item(itemId).getItemTotal();
 await Cart.item(itemId).getItemTotal(req);
 ```
-### getItemCount()
+### getItemCount
 
 ```ts
 /**
@@ -385,7 +385,7 @@ await Cart.getItemQuantity(itemId, req);
 ```
 
 
-## moveTo: Move Items Between Lists
+### moveTo: Move Items Between Lists
 
 ```ts
 /**
@@ -415,7 +415,7 @@ const movedFromWishlist1 = await Wishlist.item(itemId).moveTo('cart', req);
 - Keeps the same itemId, attributes, and associated model when moving.
 - Automatically removes the item from the source list after moving.
 
-## getCartDetails
+### getCartDetails
 ```ts
 /**
  * Get full details of the cart including items, totals, and modifiers.
