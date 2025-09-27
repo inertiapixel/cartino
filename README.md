@@ -304,11 +304,97 @@ await Cart.owner(sessionId).item(itemId).decrementQuantity(1);
 await Cart.item(itemId).decrementQuantity(1, req);
 ```
 
-## Move Items Between Lists
-
-You can easily move items between Cart, SaveForLater, and Wishlist.
+### updateQuantity
 
 ```ts
+/**
+ * Update the quantity of a specific cart item.
+ *
+ * - Pass a number: sets the absolute quantity.
+ * - Pass an object with `relative: true`: adjusts quantity by the given value.
+ * - If the resulting quantity is 0 or less, the item will be removed.
+ *
+ * @param input - Either a number or an object with `relative` and `quantity`
+ * @returns Updated cart document
+ */
+await Cart.owner(sessionId).item(itemId).updateQuantity(5); 
+// sets quantity to 5
+
+await Cart.item(itemId).updateQuantity({ relative: true, quantity: 2 }, req); 
+// increases quantity by +2
+
+await Cart.item(itemId).updateQuantity({ relative: true, quantity: -3 }, req); 
+// decreases quantity by -3
+```
+### getItemSubTotal
+
+```ts
+/**
+ * Get the subtotal of a specific cart item before cart-level modifiers.
+ * This includes the base price × quantity + any item-level modifiers.
+ *
+ * @returns number - subtotal of the item
+ */
+await Cart.owner(sessionId).item(itemId).getItemSubTotal();
+await Cart.item(itemId).getItemSubTotal(req);
+```
+### getItemTotal
+```ts
+/**
+ * Get the total of a specific cart item after applying all item-level modifiers.
+ *
+ * @returns number - final total of the item
+ */
+await Cart.owner(sessionId).item(itemId).getItemTotal();
+await Cart.item(itemId).getItemTotal(req);
+```
+### getItemCount()
+
+```ts
+/**
+ * Get the total number of unique items in the cart.
+ *
+ * @returns number - count of distinct items in the cart
+ */
+const count = await Cart.owner(sessionId).getItemCount();
+console.log(count); 
+// Example: 3 (if cart has 3 distinct products)
+```
+
+### getTotalQuantity
+```ts
+/**
+ * Get the total quantity of all items in the cart.
+ *
+ * @returns number - sum of quantities of all items
+ */
+await Cart.owner(userId).getTotalQuantity();
+await Cart.getTotalQuantity(req);
+```
+
+### getItemQuantity
+```ts
+/**
+ * Get the quantity of a specific item in the cart by its itemId.
+ *
+ * @param itemId - The ID of the item to check
+ * @returns number - quantity of the specified item, 0 if not found
+ */
+await Cart.owner(userId).getItemQuantity(itemId);
+await Cart.getItemQuantity(itemId, req);
+```
+
+
+## moveTo: Move Items Between Lists
+
+```ts
+/**
+ * You can easily move items between Cart, SaveForLater, and Wishlist.
+ * If the item already exists in the target, quantities are merged.
+ *
+ * @param target - 'cart' or 'save_for_later' or 'wishlist'
+ * @returns Updated target cart document
+ */
 // Move item from Cart → SaveForLater
 const movedToSFL = await Cart.owner(userId).item(itemId).moveTo('save_for_later');
 const movedToSFL1 = await Cart.item(itemId).moveTo('save_for_later', req);
@@ -329,10 +415,18 @@ const movedFromWishlist1 = await Wishlist.item(itemId).moveTo('cart', req);
 - Keeps the same itemId, attributes, and associated model when moving.
 - Automatically removes the item from the source list after moving.
 
-## Get Cart Details
+## getCartDetails
 ```ts
+/**
+ * Get full details of the cart including items, totals, and modifiers.
+ *
+ * @returns object - cart details with userId, sessionId, items, totals, and applied modifiers
+ */
+await Cart.owner(userId).getCartDetails();
 await Cart.getCartDetails(req);
+
 ```
+
 ## Modifiers
 
 Cartino supports **modifiers**, which allow you to apply discounts, fees, or other adjustments to **items** or the **entire cart**. Modifiers provide flexibility for promotions, extra services, and custom pricing logic.
