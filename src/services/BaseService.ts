@@ -1,7 +1,7 @@
 // src/services/BaseService.ts
 import { Types } from 'mongoose';
 import { getCartModel } from '../db/cartinoModel';
-import { EnrichedCartItem, I_Cart, I_CartItem, I_CartModifier } from '../types/cartModel';
+import { I_Cart, I_CartItem, I_CartModifier } from '../types/cartModel';
 import { isModifierValid, normalizeModifier, validateModifierOrder, validateModifierTarget, validateModifierType, validateModifierValue } from '../utils/modifierUtils';
 import { AppliedModifier, ModifierValidationIssue } from '../types/modifier';
 import { _getCartDetails } from '../utils';
@@ -683,63 +683,6 @@ export abstract class BaseService {
     return cart;
   }
 
-  // -------------------------------------------------
-  // Instance method
-  // -------------------------------------------------
-  async isEmpty(): Promise<boolean> {
-    const cart = await this.getCart();
-    return !cart || cart.items.length === 0;
-  }
-
-
-  // -------------------------------------------------
-  // Instance method
-  // -------------------------------------------------
-  async countItems(): Promise<number> {
-    const cart = await this.getOrThrow();
-    return cart.items.length;
-  }
-
-
-  async countTotalQuantity(): Promise<number> {
-    const cart = await this.getOrThrow();
-    return cart.items.reduce((total, item) => total + item.quantity, 0);
-  }
-
-  async findItem(itemId: string | Types.ObjectId): Promise<I_CartItem | undefined> {
-    const cart = await this.getOrThrow();
-  
-    const item = cart.items.find(
-      item => item.itemId.toString() === itemId.toString()
-    );
-  
-    return item;
-  }
-
-  
-  /**
-   * Removes an item from the cart by its itemId.
-   * Throws an error if cart or item is not found.
-   *
-   * @param itemId - The item ID to remove (ObjectId or string)
-   * @returns Updated cart document after item removal
-   */
-  async remove(itemId: string | Types.ObjectId): Promise<I_Cart> {
-
-    const cart = await this.getOrThrow();
-  
-    const initialLength = cart.items.length;
-    cart.items = cart.items.filter(item => item.itemId.toString() !== itemId.toString());
-  
-    if (cart.items.length === initialLength) {
-      throw new Error('Item not found in cart');
-    }
-  
-    cart.updatedAt = new Date();
-    await cart.save();
-  
-    return cart;
-  }
 
  /**
  * Updates an existing cart item's properties (like quantity, price, attributes, etc.).
@@ -789,6 +732,57 @@ export abstract class BaseService {
 
   return cart;
 }
+
+  async isEmpty(): Promise<boolean> {
+    const cart = await this.getCart();
+    return !cart || cart.items.length === 0;
+  }
+
+  async countItems(): Promise<number> {
+    const cart = await this.getOrThrow();
+    return cart.items.length;
+  }
+
+
+  async countTotalQuantity(): Promise<number> {
+    const cart = await this.getOrThrow();
+    return cart.items.reduce((total, item) => total + item.quantity, 0);
+  }
+
+  async findItem(itemId: string | Types.ObjectId): Promise<I_CartItem | undefined> {
+    const cart = await this.getOrThrow();
+  
+    const item = cart.items.find(
+      item => item.itemId.toString() === itemId.toString()
+    );
+  
+    return item;
+  }
+
+  
+  /**
+   * Removes an item from the cart by its itemId.
+   * Throws an error if cart or item is not found.
+   *
+   * @param itemId - The item ID to remove (ObjectId or string)
+   * @returns Updated cart document after item removal
+   */
+  async remove(itemId: string | Types.ObjectId): Promise<I_Cart> {
+
+    const cart = await this.getOrThrow();
+  
+    const initialLength = cart.items.length;
+    cart.items = cart.items.filter(item => item.itemId.toString() !== itemId.toString());
+  
+    if (cart.items.length === initialLength) {
+      throw new Error('Item not found in cart');
+    }
+  
+    cart.updatedAt = new Date();
+    await cart.save();
+  
+    return cart;
+  }
 
 /**
  * Increase the quantity of a specific cart item by a given value.
@@ -857,6 +851,71 @@ async clear(): Promise<I_Cart> {
 
   return cart;
 }
+
+
+async getItemSubTotal(): Promise<number> {
+  return (await this.evaluateItemModifiers()).subtotal;
+}
+
+async getItemTotal(): Promise<number> {
+  return (await this.evaluateItemModifiers()).total;
+}
+
+async moveTo(target: 'cart' | 'save_for_later'): Promise<I_Cart> {
+  if (this.instance === target) {
+    throw new Error(`Source and target must be different. Cannot move item from "${this.instance}" to "${target}".`);
+  }
+
+  const currentCart = await this.getOrThrow();
+  const item = await this.findItemOrThrow();
+
+  const CartModel = getCartModel();
+  const query: Record<string, unknown> = {
+    instance: target,
+    ...this.owner,
+  };
+
+  let targetCart = await CartModel.findOne(query);
+
+  if (!targetCart) {
+    targetCart = new CartModel({
+      ...this.owner,
+      instance: target,
+      items: [],
+    });
+  }
+
+  // Check if the item already exists in the target cart
+  const existingItem = targetCart.items.find(
+    (i) =>
+      i.itemId.toString() === item.itemId.toString() &&
+      JSON.stringify(i.attributes || {}) === JSON.stringify(item.attributes || {})
+  );
+
+  if (existingItem) {
+    // Merge quantity into existing item
+    existingItem.quantity += item.quantity;
+  } else {
+    // Push the new item
+    targetCart.items.push(item);
+  }
+
+  targetCart.updatedAt = new Date();
+
+  // Save target cart first
+  await targetCart.save();
+
+  // Now safely remove the item from the source cart
+  currentCart.items = currentCart.items.filter(
+    (i) => i.itemId.toString() !== this._itemId!.toString()
+  );
+  currentCart.updatedAt = new Date();
+
+  await currentCart.save();
+
+  return targetCart;
+}
+
 
 /**
  * Apply a pricing modifier (e.g., discount, tax, shipping) to a specific cart item.
@@ -1286,70 +1345,7 @@ async evaluateItemModifiers(): Promise<{
   };
 }
 
-
-async getItemSubTotal(): Promise<number> {
-  return (await this.evaluateItemModifiers()).subtotal;
-}
-
-async getItemTotal(): Promise<number> {
-  return (await this.evaluateItemModifiers()).total;
-}
-
-async moveTo(target: 'cart' | 'save_for_later'): Promise<I_Cart> {
-  if (this.instance === target) {
-    throw new Error(`Source and target must be different. Cannot move item from "${this.instance}" to "${target}".`);
-  }
-
-  const currentCart = await this.getOrThrow();
-  const item = await this.findItemOrThrow();
-
-  const CartModel = getCartModel();
-  const query: Record<string, unknown> = {
-    instance: target,
-    ...this.owner,
-  };
-
-  let targetCart = await CartModel.findOne(query);
-
-  if (!targetCart) {
-    targetCart = new CartModel({
-      ...this.owner,
-      instance: target,
-      items: [],
-    });
-  }
-
-  // Check if the item already exists in the target cart
-  const existingItem = targetCart.items.find(
-    (i) =>
-      i.itemId.toString() === item.itemId.toString() &&
-      JSON.stringify(i.attributes || {}) === JSON.stringify(item.attributes || {})
-  );
-
-  if (existingItem) {
-    // Merge quantity into existing item
-    existingItem.quantity += item.quantity;
-  } else {
-    // Push the new item
-    targetCart.items.push(item);
-  }
-
-  targetCart.updatedAt = new Date();
-
-  // Save target cart first
-  await targetCart.save();
-
-  // Now safely remove the item from the source cart
-  currentCart.items = currentCart.items.filter(
-    (i) => i.itemId.toString() !== this._itemId!.toString()
-  );
-  currentCart.updatedAt = new Date();
-
-  await currentCart.save();
-
-  return targetCart;
-}
-
+// cart level modifiers
 async applyModifier(modifier: I_CartModifier): Promise<I_Cart> {
   const cart = await this.getOrThrow();
 

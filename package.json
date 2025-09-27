@@ -1,7 +1,7 @@
 {
   "name": "@your-scope/cartino",
   "version": "1.0.0",
-  "description": "Cart and wishlist system for Node.js and Express, designed for full-stack MERN apps.",
+  "description": "Cart management library for Node.js and TypeScript.",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -38,18 +38,20 @@
   "keywords": [
     "cart",
     "wishlist",
+    "cart wishlist save for later node library",
     "ecommerce",
     "mern",
     "cart system",
     "express cart",
     "nodejs cart",
     "checkout system",
-    "stateless cart"
+    "stateless cart",
+    "opensource nodejs cart library"
   ],
   "author": {
     "name": "Md Asif",
     "email": "mdasiff007@gmail.com",
-    "url": "https://github.com/mdasiff007"
+    "url": "https://github.com/inertiapixel"
   },
   "license": "MIT",
   "devDependencies": {
