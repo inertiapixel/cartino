@@ -568,6 +568,109 @@ const modifiers = await Cart.item(itemId).getItemModifierByName(['Discount', 'Ta
 const modifiersOwner = await Cart.owner(userId).item(itemId).getItemModifierByName(['Discount', 'Tax']);
 ```
 
+### getItemModifierByType
+```ts
+/**
+ * Get all modifiers by type(s) for the current item.
+ *
+ * @param typeOrTypes - Single type or array of types (e.g., 'discount', 'tax')
+ * @returns Array of matching modifiers
+ * @throws Error if cart or item not found
+ */
+await Cart.item(itemId).getItemModifiersByType('discount',req);
+await Cart.owner(userId).item(itemId).getItemModifiersByType(['discount', 'tax']);
+```
+
+### hasItemModifier
+```ts
+/**
+ * Check if the item has at least one modifier matching the given name and/or type.
+ *
+ * @param filter - Object containing:
+ *   - `name`: string or array of strings to match modifier names
+ *   - `type`: string or array of strings to match modifier types
+ *   - `match`: 'any' (default) to match either `name` or `type`, or 'all' to require both in same modifier
+ * @returns boolean
+ *
+ * @example
+ * await Cart.item(itemId).hasItemModifier({ name: "discount" }, req);
+ * await Cart.item(itemId).hasItemModifier({ type: "tax" });
+ * await Cart.item(itemId).hasItemModifier({ name: ["discount","offer"] }, req);
+ * await Cart.item(itemId).hasItemModifier({ name: "discount", type: "tax", match: "any" }, req);
+ * await Cart.item(itemId).hasItemModifier({ name: "discount", type: "tax", match: "all" }, req);
+ */
+await Cart.item(itemId).hasItemModifier({ name: "discount" }, req);
+await Cart.owner(userId).item(itemId).hasItemModifier({ type: ["tax","fee"] }, req);
+```
+
+### reorderItemModifiers
+```ts
+/**
+ * Reorder the modifiers of a specific cart item based on the provided modifier names.
+ *
+ * Any modifiers not included in the `names` array will be appended at the end in original order.
+ * Must be chained after `.owner(userId).item(itemId)` to set the context.
+ *
+ * @param names - Array of modifier names specifying the desired order.
+ * @returns boolean - true if reorder was successful
+ * @throws Error if cart or item not found
+ *
+ */
+await Cart.item(itemId).reorderItemModifiers(['Discount', 'Tax', 'Shipping'], req);
+await Cart.owner(userId).item(itemId).reorderItemModifiers(['Coupon']);
+
+```
+
+### updateItemModifier
+```ts
+/**
+ * Updates a specific modifier on the selected cart item by name.
+ *
+ * Allows partial updates to any field of a modifier (e.g., value, type, operator, metadata).
+ * Ensures the cart and item exist before applying the updates.
+ *
+ * @param name - The name of the modifier to update.
+ * @param modifier - A partial object containing fields to update.
+ * @returns cart - Updated cart document
+ * @throws Error if the cart, item, or modifier is not found, or if the update is invalid.
+ *
+ * @example
+ * // Update discount value
+ * await Cart.owner(userId).item(itemId).updateItemModifier("Discount", { value: "-20%" });
+ *
+ * // Change type and target
+ * await Cart.item(itemId).updateItemModifier("Tax", { type: "tax", target: "total" }, req);
+ *
+ * // Update metadata
+ * await Cart.owner(userId).item(itemId).updateItemModifier("Coupon", { metadata: { appliedBy: "admin" } });
+ */
+await Cart.item(itemId).updateItemModifier("Discount", { value: "-50" }, req);
+await Cart.owner(userId).item(itemId).updateItemModifier("Tax", { value: "18%", target: "subtotal" });
+
+```
+
+### evaluateItemModifiers
+
+Returns a detailed summary including subtotal, total, difference, and applied modifier breakdown.
+
+```ts
+await Cart.owner(userId).item(itemId).evaluateItemModifiers();
+await Cart.item(itemId).evaluateItemModifiers(req);
+```
+
+| Field               | Type                    | Description                                     |
+| ------------------- | ----------------------- | ----------------------------------------------- |
+| `name`              | `string`                | Modifier name                                   |
+| `type`              | `string`                | Modifier type (discount, tax, shipping, etc.)   |
+| `operator`          | `'add' \| 'subtract'`   | Operation applied                               |
+| `value`             | `string \| number`      | Raw modifier value (e.g. `"-10%"`, `"+20"`)     |
+| `differenceAmount`  | `number`                | Absolute impact of this modifier                |
+| `differencePercent` | `number`                | Percentage impact relative to original subtotal |
+| `isFlat`            | `boolean`               | True if flat value                              |
+| `isPercent`         | `boolean`               | True if percentage-based                        |
+| `target`            | `'subtotal' \| 'total'` | Whether modifier applies before or after total  |
+| `order?`            | `number`                | Order of application                            |
+
 
 ```ts
 // Update a modifier
