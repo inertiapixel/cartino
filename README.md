@@ -427,6 +427,18 @@ await Cart.getCartDetails(req);
 
 ```
 
+### clear
+```ts
+/**
+ * Removes all items and modifiers from the cart.
+ *
+ * @returns I_Cart - the updated (now-empty) cart document
+ * @throws Error if the cart is not found
+ */
+await Cart.owner(userId).clear();
+await Cart.clear(req);
+```
+
 ## Modifiers
 
 Cartino supports **modifiers**, which allow you to apply discounts, fees, or other adjustments to **items** or the **entire cart**. Modifiers provide flexibility for promotions, extra services, and custom pricing logic.
@@ -441,20 +453,123 @@ Modifiers applied to **specific cart items**.
 - **Examples:** `"10% Off"`, `"Gift Wrap"`, `"Extra Warranty"`.
 - **Usage:**
 
+### applyItemModifier
 ```ts
-// Apply modifier
-await Cart.item(itemId).applyItemModifier({
-      name: 'Shipping Cost',
-      value: -200,
-      type: 'shipping',
-      target: 'total',
-      order: 2,
-      metadata: { region: 'North America', key_1:'value 1' }
+/**
+ * Apply a pricing modifier (e.g., discount, tax, shipping) to a specific cart item.
+ *
+ * Supports value formats like flat amount (e.g., -100, 100) or percentage (e.g., -10%, 10%).
+ * If target is not provided, it defaults to 'subtotal'.
+ * If order is not provided, it is auto-incremented based on existing modifiers.
+ *
+ * @param modifier - Modifier to apply (requires type and value; name is optional)
+ * @returns I_Cart - updated cart with the modifier applied
+ * @throws Error if cart or item not found, or modifier is invalid/duplicate
+ */
+await Cart.owner(userId).item(itemId).applyItemModifier({ type: 'gift', value: 100 });
+await Cart
+      .item(itemId)
+      .applyItemModifier({
+        name: 'GST',
+        type: 'TAX',
+        value: 600,
+        order: 3, // optional
+        target: 'total', // optional
+        metadata: {
+          source: 'tax',
+          campaignId: 'add'
+        } // optional
+      }, req);
+
+await Cart
+    .item(itemId)
+    .applyItemModifier({
+      type: 'coupon',
+      value: -1000
     }, req);
 
-// Remove a modifier
-await Cart.item(itemId).removeItemModifier("Shipping Cost");
+await Cart
+    .item(itemId)
+    .applyItemModifier({
+      type: 'BLACK_FRIDAY',
+      type: 'coupon',
+      value: '-10%'
+    },req);
 
+```
+
+### applyModifierToAllItems
+```ts
+/**
+ * Apply a pricing modifier (e.g., discount, tax) to all items in the cart.
+ *
+ * If the modifier's `order` is not provided, it will be auto-incremented per item.
+ *
+ * @param modifier - Modifier definition to apply (must include type and value; target is optional and defaults to "subtotal")
+ * @returns I_Cart - updated cart with the modifier applied to all items
+ * @throws Error if cart not found, or modifier is invalid
+ */
+await Cart.applyModifierToAllItems({ type: 'discount', name: '10% Off', value: '-10%' }, req);
+await Cart.owner(userId).applyModifierToAllItems({ type: 'tax', name: 'GST', value: '5%' });
+```
+
+### removeItemModifier
+```ts
+/**
+ * Remove a specific modifier from a cart item by its name.
+ * 
+ * @param modifierName - The name of the modifier to remove
+ * @returns I_Cart - updated cart document after removal
+ * @throws Error if cart, item, or modifier not found
+ */
+await Cart.item(itemId).removeItemModifier('Discount', req);
+await Cart.owner(userId).item(itemId).removeItemModifier('Tax');
+```
+
+### clearItemModifiers
+```ts
+/**
+ * Remove all modifiers from a specific cart item.
+ *
+ * @returns I_Cart - updated cart document after clearing modifiers
+ * @throws Error if cart or item not found
+ */
+await Cart.item(itemId).clearItemModifiers(req);
+await Cart.owner(userId).item(itemId).clearItemModifiers();
+```
+### getItemModifiers
+```ts
+/**
+ * Retrieve all modifiers applied to a specific cart item.
+ *
+ * @returns I_CartModifier[] - array of modifiers for the item
+ * @throws Error if cart or item not found
+ */
+await Cart.item(itemId).getItemModifiers(req);
+await Cart.owner(userId).item(itemId).getItemModifiers();
+```
+
+### getItemModifierByName
+```ts
+/**
+ * Get one or more modifiers by name(s) for the current item.
+ *
+ * @param nameOrNames - Single name or array of names
+ * @returns I_CartModifier | I_CartModifier[] | undefined - matching modifier(s)
+ * @throws Error if cart or item not found
+ */
+
+// Single modifier by name
+const discountModifier = await Cart.item(itemId).getItemModifierByName('Discount', req);
+const discountModifierOwner = await Cart.owner(userId).item(itemId).getItemModifierByName('Discount');
+
+// Multiple modifiers by array of names
+const modifiers = await Cart.item(itemId).getItemModifierByName(['Discount', 'Tax'], req);
+const modifiersOwner = await Cart.owner(userId).item(itemId).getItemModifierByName(['Discount', 'Tax']);
+```
+
+
+```ts
 // Update a modifier
 await Cart.item(itemId).updateItemModifier("Gift Wrap", { name: "Premium Gift Wrap" });
 
