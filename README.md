@@ -662,8 +662,8 @@ await Cart.item(itemId).evaluateItemModifiers(req);
 | ------------------- | ----------------------- | ----------------------------------------------- |
 | `name`              | `string`                | Modifier name                                   |
 | `type`              | `string`                | Modifier type (discount, tax, shipping, etc.)   |
-| `operator`          | `'add' \| 'subtract'`   | Operation applied                               |
-| `value`             | `string \| number`      | Raw modifier value (e.g. `"-10%"`, `"+20"`)     |
+| `operator`          | `'add' | 'subtract'`   | Operation applied                               |
+| `value`             | `string | number`      | Raw modifier value (e.g. `"-10%"`, `"+20"`)     |
 | `differenceAmount`  | `number`                | Absolute impact of this modifier                |
 | `differencePercent` | `number`                | Percentage impact relative to original subtotal |
 | `isFlat`            | `boolean`               | True if flat value                              |
@@ -748,30 +748,97 @@ await Cart.owner(userId).clearModifiers();
 await Cart.clearModifiers(req);
 ```
 
-
-
+### getModifiers
 ```ts
-await Cart.applyModifier({ type: "discount", name: "Black Friday 20%" });
-// Remove a modifier
-await Cart.removeModifier("Black Friday 20%");
+// get all applied modifiers
+await Cart.owner(userId).getModifiers();
+await Cart.getModifiers(req);
+```
 
-// Remove by type
-await Cart.removeModifierByType("shipping");
+### getModifier
+```ts
+// get modifier(s) by name
+await Cart.owner(userId).getModifier('GST');
+await Cart.getModifier('GST', req);
 
-// Clear all modifiers
-await Cart.clearModifiers();
+// multiple names
+await Cart.owner(userId).getModifier(['GST', 'Discount']);
+await Cart.getModifier(['GST', 'Discount'], req);
+```
 
-// Reorder modifiers
-await Cart.reorderModifiers(["Black Friday 20%", "Express Shipping"]);
+### getModifierByType
+```ts
+// get modifier(s) by type
+await Cart.owner(userId).getModifierByType('tax');
+await Cart.getModifierByType('tax', req);
 
-// Get modifiers
-const modifiers = await Cart.getModifiers();
-const specificModifiers = await Cart.getModifier(["Black Friday 20%", "Express Shipping"]);
-const hasDiscount = await Cart.hasModifier({ type: "discount" });
-const tax = await Cart.owner(userId).getModifierByType('tax');
-const taxes = await Cart.owner(userId).getModifierByType(['TAX 1', 'TAX 2']);
+// multiple types
+await Cart.owner(userId).getModifierByType(['tax', 'discount']);
+await Cart.getModifierByType(['tax', 'discount'], req);
+```
+
+### hasModifier
+```ts
+// check if modifier exists by name
+await Cart.owner(userId).hasModifier({ name: 'discount' });
+await Cart.hasModifier({ name: 'discount' }, req);
+
+// check if modifier exists by type
+await Cart.owner(userId).hasModifier({ type: 'shipping' });
+await Cart.hasModifier({ type: 'shipping' }, req);
+
+// multiple names
+await Cart.owner(userId).hasModifier({ name: ['coupon', 'gift'] });
+
+// name + type with 'any' (default)
+await Cart.owner(userId).hasModifier({ name: 'tax', type: 'service' });
+
+// name + type with 'all' (must match same modifier)
+await Cart.owner(userId).hasModifier({ name: 'tax', type: 'service', match: 'all' });
+```
+
+### reorderModifiers
+```ts
+// reorder modifiers by names (others remain in original order)
+await Cart.owner(userId).reorderModifiers(['Tax', 'Shipping']);
+await Cart.reorderModifiers(['Tax', 'Shipping'], req);
+```
+
+### updateModifier
+```ts
+// update modifier by name
+await Cart.owner(userId).updateModifier('Tax', { value: 20 });
+await Cart.updateModifier('Tax', { value: 20 }, req);
+
+await Cart.updateModifier('SHPPING', {
+      value: '200',
+      type: 'shipping',
+      target: 'total',
+      order: 2,
+      metadata: { key:'value' }
+    }, req);
 
 ```
+
+### evaluateModifiers
+```ts
+// calculate subtotal, total & applied modifiers
+await Cart.owner(userId).evaluateModifiers();
+await Cart.evaluateModifiers(req);
+
+/**
+{
+    "subtotal": 450,
+    "total": 450,
+    "differenceAmount": 0,
+    "differencePercent": 0,
+    "appliedModifiers": []
+}
+*/
+
+```
+
+
 ---
 
 ## License
