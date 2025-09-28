@@ -837,7 +837,55 @@ await Cart.evaluateModifiers(req);
 */
 
 ```
+### getSubTotal
+```ts
+// get subtotal after item-level modifiers
+await Cart.owner(userId).getSubTotal();
+await Cart.getSubTotal(req);
+```
 
+### getSubTotal
+```ts
+// get subtotal after item-level modifiers
+await Cart.owner(userId).getSubTotal();
+await Cart.getSubTotal(req);
+```
+
+### getTotal
+```ts
+// get final total after cart-level modifiers
+await Cart.owner(userId).getTotal();
+await Cart.getTotal(req);
+```
+
+### getItemCount
+```ts
+// get number of distinct items in cart
+await Cart.owner(userId).getItemCount();
+await Cart.getItemCount(req);
+```
+
+### getTotalQuantity
+```ts
+// get total quantity of all items
+await Cart.owner(userId).getTotalQuantity();
+await Cart.getTotalQuantity(req);
+
+```
+
+### getItemQuantity
+```ts
+// get quantity of a specific item
+await Cart.owner(userId).getItemQuantity(itemId);
+await Cart.getItemQuantity(itemId, req);
+
+```
+
+### getCartDetails
+```ts
+// get full cart summary (userId, sessionId, totals, modifiers, etc.)
+const details = await Cart.owner(userId).getCartDetails();
+```
 
 ---
 
