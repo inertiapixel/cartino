@@ -885,6 +885,116 @@ await Cart.getItemQuantity(itemId, req);
 ```ts
 // get full cart summary (userId, sessionId, totals, modifiers, etc.)
 const details = await Cart.owner(userId).getCartDetails();
+const details = await Cart.getCartDetails(req);
+//Success: 200
+{
+    "sessionId": null,
+    "summary": {
+        "originalSubtotal": 450,
+        "modifiedSubtotal": 450,
+        "originalTotal": 1550,
+        "finalTotal": 1550,
+        "totalDifference": 0,
+        "totalDifferencePercent": 0,
+        "totalItems": 9,
+        "totalUniqueItems": 4,
+        "totalModifiersCount": 2,
+        "isDiscountApplied": false,
+        "finalTotalRounded": 1550
+    },
+    "items": [
+        {
+            "itemId": "68d2989f039eddcd6036f583",
+            "name": "My prod 5",
+            "quantity": 3,
+            "price": 50,
+            "originalSubtotal": 150,
+            "modifiersApplied": [],
+            "finalTotal": 150
+        },
+        {
+            "itemId": "68d29894039eddcd6036f581",
+            "name": "My prod 3",
+            "quantity": 2,
+            "price": 50,
+            "originalSubtotal": 100,
+            "modifiersApplied": [],
+            "finalTotal": 100
+        },
+        {
+            "itemId": "68d2988d039eddcd6036f580",
+            "name": "My prod 2",
+            "quantity": 2,
+            "price": 50,
+            "originalSubtotal": 100,
+            "modifiersApplied": [
+                {
+                    "name": "COUPON",
+                    "type": "TAX",
+                    "order": 3,
+                    "target": "total",
+                    "value": "500",
+                    "effect": {
+                        "before": 100,
+                        "after": 600,
+                        "differenceAmount": 500,
+                        "differencePercent": 500
+                    }
+                },
+                {
+                    "name": "GST",
+                    "type": "TAX",
+                    "order": 3,
+                    "target": "total",
+                    "value": "600",
+                    "effect": {
+                        "before": 600,
+                        "after": 1200,
+                        "differenceAmount": 600,
+                        "differencePercent": 100
+                    }
+                }
+            ],
+            "finalTotal": 1200
+        },
+        {
+            "itemId": "68d29835039eddcd6036f57f",
+            "name": "My prod 1",
+            "quantity": 2,
+            "price": 50,
+            "originalSubtotal": 100,
+            "modifiersApplied": [],
+            "finalTotal": 100
+        }
+    ],
+    "cartLevelModifiersApplied": [],
+    "calculationTimeline": [
+        {
+            "stage": "item-modifier",
+            "itemId": "68d2988d039eddcd6036f580",
+            "itemName": "My prod 2",
+            "target": "total",
+            "modifierName": "COUPON",
+            "modifierType": "TAX",
+            "before": 100,
+            "after": 600,
+            "differenceAmount": 500,
+            "differencePercent": 500
+        },
+        {
+            "stage": "item-modifier",
+            "itemId": "68d2988d039eddcd6036f580",
+            "itemName": "My prod 2",
+            "target": "total",
+            "modifierName": "GST",
+            "modifierType": "TAX",
+            "before": 600,
+            "after": 1200,
+            "differenceAmount": 600,
+            "differencePercent": 100
+        }
+    ]
+}
 ```
 
 ---
