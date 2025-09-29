@@ -21,7 +21,7 @@
 
 - [Why This Exists](#why-this-exists)
 - [Features](#features)
-- [Installation & Setup](#installation-and-setup)
+- [Installation & Setup](#installation-&-setup)
 - [Environment Variables](#environment-variables)
 - [Quick Start](#quick-start)
 - [License](#license)
