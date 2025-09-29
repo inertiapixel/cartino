@@ -21,7 +21,7 @@
 
 - [Why This Exists](#why-this-exists)
 - [Features](#features)
-- [Installation & Setup](#installation-&-setup)
+- [Installation and Setup](#installation-and-setup)
 - [Environment Variables](#environment-variables)
 - [Quick Start](#quick-start)
 - [License](#license)
@@ -48,7 +48,7 @@ Cartino ships with 50+ useful methods that help developers manage cart operation
 
 ---
 
-## Installation & Setup
+## Installation and Setup
 
 [![npm version](https://img.shields.io/npm/v/@inertiapixel/cartino)](https://www.npmjs.com/package/@inertiapixel/cartino)
 
