@@ -83,7 +83,7 @@ export async function runInitCommand() {
 function writeCartModel(filePath: string) {
   const template = `
 import mongoose, { Schema, Types } from 'mongoose';
-import { I_Cart } from '@your-scope/cartino';
+import { I_Cart } from '@inertiapixel/cartino';
 
 /**
  * target: 'total': // this modifiers will be applied to cart's subtotal when getSubTotal() is called.
@@ -150,9 +150,9 @@ import {
   Wishlist,
   SaveForLater,
   Cartino
-} from '@your-scope/cartino';
+} from '@inertiapixel/cartino';
 
-import { CartModel } from '@/models/CartModel';
+import { CartModel } from '@/models/CartModel'; //adjust model path based on your project
 
 export const cartinoMiddleware = createCartinoMiddleware(CartModel);
 

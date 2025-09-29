@@ -1,5 +1,5 @@
 {
-  "name": "@your-scope/cartino",
+  "name": "@inertiapixel/cartino",
   "version": "1.0.0",
   "description": "Cart management library for Node.js and TypeScript.",
   "main": "dist/index.js",
