@@ -24,7 +24,7 @@
 - [Installation and Setup](#installation-and-setup)
 - [Quick Start](#quick-start)
 - [License](#license)
-- [Related Projects](#related-projects)
+- [Our Other Projects](#our-other-projects)
 
 ---
 
@@ -1004,7 +1004,7 @@ MIT © [inertiapixel](https://github.com/inertiapixel)
 
 ---
 
-## Related Projects
+## Our Other Projects
 
 - [`@inertiapixel/nextjs-auth`](https://github.com/inertiapixel/nextjs-auth) — Frontend auth package for React/Next.js
 - [`@inertiapixel/nodejs-auth`](https://github.com/inertiapixel/nodejs-auth) — Backend auth package for Nodejs / Express Js / TypeScript
