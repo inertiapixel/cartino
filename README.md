@@ -1,4 +1,4 @@
-<p align="center">
+              <p align="center">
   <br/>
   <a href="https://www.inertiapixel.com/" target="_blank"><img width="150px" src="https://www.inertiapixel.com/images/logo-min.svg" /></a>
   <h3 align="center">@inertiapixel/cartino</h3>
@@ -22,7 +22,6 @@
 - [Why This Exists](#why-this-exists)
 - [Features](#features)
 - [Installation and Setup](#installation-and-setup)
-- [Environment Variables](#environment-variables)
 - [Quick Start](#quick-start)
 - [License](#license)
 - [Related Projects](#related-projects)
