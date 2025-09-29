@@ -338,12 +338,18 @@ export abstract class BaseService {
     req?: CartinoRequest,
     fallbackOwnerId?: string
   ): Promise<I_CartModifier | undefined | I_CartModifier[]> {
-    return this.run(
-      service => service.item(itemId).getItemModifierByName(nameOrNames as any),
+    return this.run<I_CartModifier | undefined | I_CartModifier[]>(
+      (service: T) => {
+        if (typeof nameOrNames === "string") {
+          return service.item(itemId).getItemModifierByName(nameOrNames);
+        }
+        return service.item(itemId).getItemModifierByName(nameOrNames);
+      },
       req,
       fallbackOwnerId
     );
   }
+  
   
   static async getItemModifiersByType<T extends BaseService>(
     this: BaseServiceStatic<T>,
