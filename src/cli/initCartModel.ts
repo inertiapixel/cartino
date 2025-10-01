@@ -1,6 +1,6 @@
 // src/cli/initCartModel.ts
-import fs from 'fs';
-import path from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
 import inquirer from 'inquirer';
 
 export async function runInitCommand() {
@@ -152,7 +152,7 @@ import {
   Cartino
 } from '@inertiapixel/cartino';
 
-import { CartModel } from '@/models/CartModel'; //adjust model path based on your project
+import { CartModel } from '../models/CartModel'; //adjust model path based on your project
 
 export const cartinoMiddleware = createCartinoMiddleware(CartModel);
 
