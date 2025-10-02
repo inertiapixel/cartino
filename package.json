@@ -1,6 +1,6 @@
 {
   "name": "@inertiapixel/cartino",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Cart management library for Node.js and TypeScript.",
   "main": "dist/index.js",
   "module": "dist/index.js",
