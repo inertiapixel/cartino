@@ -1,11 +1,10 @@
 {
   "name": "@inertiapixel/cartino",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "Cart management library for Node.js and TypeScript.",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
-  "type": "module",
   "publishConfig": {
     "access": "public"
   },
@@ -20,15 +19,15 @@
     }
   },
   "bin": {
-    "cartino-init": "./dist/cli/cartino-init.js"
+    "cartino-init": "./dist/cli/cartino-init.cjs"
   },
   "scripts": {
     "clean": "rm -rf dist",
     "prebuild": "npm run clean",
-    "build": "tsc && chmod +x ./dist/cli/cartino-init.js",
+    "build": "tsc && mv ./dist/cli/cartino-init.js ./dist/cli/cartino-init.cjs && chmod +x ./dist/cli/cartino-init.cjs",
     "postbuild": "npm run generate-types",
-    "generate-types": "tsc --emitDeclarationOnly",
-    "dev": "tsc-watch --onSuccess \"chmod +x ./dist/cli/cartino-init.js\"",
+    "generate-types": "tsc --emitDeclarationOnly --outDir dist/types",
+    "dev": "tsc-watch --onSuccess \"mv ./dist/cli/cartino-init.js ./dist/cli/cartino-init.cjs && chmod +x ./dist/cli/cartino-init.cjs\"",
     "lint": "eslint \"src/**/*.{ts,tsx}\" --quiet",
     "lint:fix": "npm run lint -- --fix",
     "test": "echo \"Add unit tests here\"",
